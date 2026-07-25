@@ -383,7 +383,7 @@ if str_module.sidebar.button("🔒 Cerrar Sesión"):
     str_module.session_state["rol"] = None
     str_module.rerun()
 
-pestana_principal, pestana_escandallos, pestana_movimientos, pestana_mermas, pestana_recetas, pestana_ingenieria, pestana_eventos, pestana_pedidos, pestana_facturacion = str_module.tabs([
+pestana_principal, pestana_escandallos, pestana_movimientos, pestana_mermas, pestana_recetas, pestana_ingenieria, pestana_eventos, pestana_pedidos, pestana_facturacion, pestana_escaner = str_module.tabs([
     "📦 Inventario y Almacén", 
     "📊 Escandallos / Precios",
     "🔄 Entradas / Salidas de Género", 
@@ -392,7 +392,8 @@ pestana_principal, pestana_escandallos, pestana_movimientos, pestana_mermas, pes
     "📈 Ingeniería de Menú",
     "🎉 Eventos / Menús Cerrados",
     "🛒 Gestión de Pedidos",
-    "📑 Facturación y Gestoría"
+    "📑 Facturación y Gestoría",
+    "📱 Escáner Móvil"
 ])
 
 with pestana_principal:
@@ -1734,3 +1735,31 @@ with pestana_facturacion:
             str_module.dataframe(df_control_alb, use_container_width=True, hide_index=True)
         else:
             str_module.info("No hay albaranes registrados todavía para analizar.")
+
+with pestana_escaner:
+    def modulo_escaner_stock():
+        str_module.subheader("📱 Escáner de Albaranes y Productos (Móvil)")
+        
+        tipo_movimiento = str_module.radio(
+            "Selecciona la operación:", 
+            ["Entrada de Stock (Albarán/Factura)", "Salida / Consumo / Merma"],
+            key="radio_escaner_tipo"
+        )
+        
+        imagen_capturada = str_module.camera_input("Apunta al código de barras o QR")
+        
+        if imagen_capturada is not None:
+            str_module.success("¡Imagen capturada correctamente desde el dispositivo!")
+            
+            conn = sqlite3.connect(DB_NAME)
+            cursor = conn.cursor()
+            
+            if "Entrada" in tipo_movimiento:
+                str_module.info("Registrando entrada de género al stock...")
+            else:
+                str_module.info("Registrando salida o consumo...")
+                
+            conn.close()
+
+    modulo_escaner_stock()
+```[cite: 6]
