@@ -1,10 +1,3 @@
-¡Hola, José Antonio! No te preocupes, en ningún momento se te han borrado parámetros de la base de datos o de la configuración del sistema.
-
-El código que estás viendo mantiene intactas todas las tablas y estructuras de SQLite que alimentan la aplicación (como la `hoja_almacen`, `recetas_ingredientes`, `historial_pedidos`, etc.), así como las funciones de control de acceso por contraseña. Lo que ocurre a veces al actualizar o visualizar bloques extensos es que se compactan visualmente algunas vistas, pero **los parámetros y la lógica de negocio siguen exactamente donde los dejaste**.
-
-Aquí tienes el código completo, limpio y listo para funcionar en Streamlit con todos tus parámetros de administración, control de stock, escandallos e ingeniería de menú integrados:
-
-```python
 import streamlit as str_module
 import pandas as pd
 import sqlite3
@@ -739,78 +732,78 @@ with pestana_principal:
         str_module.info("La base de datos está vacía actualmente.")
 
 with pestana_escandallos:
-    str_module.title("📊 Escandallos y Precios (Solo Visualización)")
-    str_module.markdown("Consulta el registro de escandallos, precios netos y mermas calculadas.")
+    str_module.title("📊 Escandallos y Precios Netos")
+    str_module.markdown("Calcula los precios netos aplicando el porcentaje de merma y actualiza automáticamente el precio unitario en el inventario de almacén.")
     str_module.markdown("---")
 
     df_esc_guardados = ejecutar_sql("SELECT * FROM escandallos_precios")
     if not df_esc_guardados.empty:
         str_module.dataframe(df_esc_guardados, use_container_width=True, hide_index=True)
-        
-        if str_module.session_state["rol"] == "admin":
-            str_module.markdown("---")
-            str_module.markdown("### 📊 Registrar / Actualizar Escandallo")
-            df_inv_escandallo = ejecutar_sql("SELECT CÓDIGO, PRODUCTO, [PRECIO UNITARIO €] FROM hoja_almacen")
-            if not df_inv_escandallo.empty:
-                opciones_inv_esc = [f"{row['CÓDIGO']} - {row['PRODUCTO']}" for _, row in df_inv_escandallo.iterrows()]
-
-                with str_module.form("form_escandallo_precios"):
-                    ce1, ce2, ce3 = str_module.columns(3)
-                    with ce1:
-                        producto_esc_sel = str_module.selectbox("Seleccionar Producto", opciones_inv_esc)
-                        precio_bruto_input = str_module.text_input("Precio Bruto (€)", value="0.0")
-                    with ce2:
-                        merma_input = str_module.text_input("Merma del Producto (%)", value="0.0")
-                    with ce3:
-                        str_module.markdown("<br>", unsafe_allow_html=True)
-                        btn_guardar_esc = str_module.form_submit_button("⚡ Calcular, Registrar y Actualizar Almacén")
-
-                    if btn_guardar_esc:
-                        try:
-                            p_bruto = float(str(precio_bruto_input).strip().replace(',', '.') or 0.0)
-                            p_merma = float(str(merma_input).strip().replace(',', '.') or 0.0)
-
-                            if p_merma >= 100:
-                                str_module.error("La merma no puede ser igual o superior al 100%.")
-                            else:
-                                denominador = (1.0 - (p_merma / 100.0))
-                                precio_neto = p_bruto / denominador if denominador > 0 else p_bruto
-
-                                codigo_prod = producto_esc_sel.split(" - ")[0]
-                                nombre_prod = producto_esc_sel.split(" - ")[1]
-
-                                row_actual_prod = df_inv_escandallo[df_inv_escandallo['CÓDIGO'] == codigo_prod]
-                                precio_actual_db = float(row_actual_prod.iloc[0]['[PRECIO UNITARIO €]']) if not row_actual_prod.empty and '[PRECIO UNITARIO €]' in row_actual_prod.columns else 0.0
-
-                                conn = sqlite3.connect(DB_NAME)
-                                cursor = conn.cursor()
-                                cursor.execute("""
-                                    INSERT OR REPLACE INTO escandallos_precios (CÓDIGO, PRODUCTO, [PRECIO BRUTO], [MERMA %], [PRECIO NETO])
-                                    VALUES (?, ?, ?, ?, ?)
-                                """, (codigo_prod, nombre_prod, p_bruto, p_merma, precio_neto))
-
-                                if precio_actual_db > 0 and abs(precio_neto - precio_actual_db) > 0.001:
-                                    cursor.execute("""
-                                        INSERT INTO precios_pendientes_validacion (FECHA, PROVEEDOR, CÓDIGO, PRODUCTO, PRECIO_ACTUAL, PRECIO_NUEVO, ESTADO)
-                                        SELECT ?, PROVEEDOR, ?, ?, ?, ?, 'PENDIENTE'
-                                        FROM hoja_almacen WHERE CÓDIGO = ?
-                                    """, (date.today().strftime("%Y-%m-%d"), codigo_prod, nombre_prod, precio_actual_db, precio_neto, codigo_prod))
-                                    str_module.warning("⚠️ Se ha detectado una diferencia con el precio actual. El cambio se ha enviado a la bandeja de validación del administrador.")
-                                else:
-                                    cursor.execute("""
-                                        UPDATE hoja_almacen SET [PRECIO UNITARIO €] = ? WHERE CÓDIGO = ?
-                                    """, (precio_neto, codigo_prod))
-                                    str_module.success(f"¡Precio Neto calculado ({precio_neto:.2f} €), registrado y actualizado en el Almacén para '{nombre_prod}'!")
-
-                                conn.commit()
-                                conn.close()
-                                str_module.rerun()
-                        except Exception as e:
-                            str_module.error(f"Error al calcular el precio neto: {e}")
-            else:
-                str_module.info("No hay referencias en el inventario.")
     else:
         str_module.info("Todavía no se ha registrado ningún escandallo de precios.")
+
+    if str_module.session_state["rol"] == "admin":
+        str_module.markdown("---")
+        str_module.markdown("### 📊 Registrar / Actualizar Escandallo")
+        df_inv_escandallo = ejecutar_sql("SELECT CÓDIGO, PRODUCTO, [PRECIO UNITARIO €] FROM hoja_almacen")
+        if not df_inv_escandallo.empty:
+            opciones_inv_esc = [f"{row['CÓDIGO']} - {row['PRODUCTO']}" for _, row in df_inv_escandallo.iterrows()]
+
+            with str_module.form("form_escandallo_precios"):
+                ce1, ce2, ce3 = str_module.columns(3)
+                with ce1:
+                    producto_esc_sel = str_module.selectbox("Seleccionar Producto", opciones_inv_esc)
+                    precio_bruto_input = str_module.text_input("Precio Bruto (€)", value="0.0")
+                with ce2:
+                    merma_input = str_module.text_input("Merma del Producto (%)", value="0.0")
+                with ce3:
+                    str_module.markdown("<br>", unsafe_allow_html=True)
+                    btn_guardar_esc = str_module.form_submit_button("⚡ Calcular, Registrar y Actualizar Almacén")
+
+                if btn_guardar_esc:
+                    try:
+                        p_bruto = float(str(precio_bruto_input).strip().replace(',', '.') or 0.0)
+                        p_merma = float(str(merma_input).strip().replace(',', '.') or 0.0)
+
+                        if p_merma >= 100:
+                            str_module.error("La merma no puede ser igual o superior al 100%.")
+                        else:
+                            denominador = (1.0 - (p_merma / 100.0))
+                            precio_neto = p_bruto / denominador if denominador > 0 else p_bruto
+
+                            codigo_prod = producto_esc_sel.split(" - ")[0]
+                            nombre_prod = producto_esc_sel.split(" - ")[1]
+
+                            row_actual_prod = df_inv_escandallo[df_inv_escandallo['CÓDIGO'] == codigo_prod]
+                            precio_actual_db = float(row_actual_prod.iloc[0]['[PRECIO UNITARIO €]']) if not row_actual_prod.empty and '[PRECIO UNITARIO €]' in row_actual_prod.columns else 0.0
+
+                            conn = sqlite3.connect(DB_NAME)
+                            cursor = conn.cursor()
+                            cursor.execute("""
+                                INSERT OR REPLACE INTO escandallos_precios (CÓDIGO, PRODUCTO, [PRECIO BRUTO], [MERMA %], [PRECIO NETO])
+                                VALUES (?, ?, ?, ?, ?)
+                            """, (codigo_prod, nombre_prod, p_bruto, p_merma, precio_neto))
+
+                            if precio_actual_db > 0 and abs(precio_neto - precio_actual_db) > 0.001:
+                                cursor.execute("""
+                                    INSERT INTO precios_pendientes_validacion (FECHA, PROVEEDOR, CÓDIGO, PRODUCTO, PRECIO_ACTUAL, PRECIO_NUEVO, ESTADO)
+                                    SELECT ?, PROVEEDOR, ?, ?, ?, ?, 'PENDIENTE'
+                                    FROM hoja_almacen WHERE CÓDIGO = ?
+                                """, (date.today().strftime("%Y-%m-%d"), codigo_prod, nombre_prod, precio_actual_db, precio_neto, codigo_prod))
+                                str_module.warning("⚠️ Se ha detectado una diferencia con el precio actual. El cambio se ha enviado a la bandeja de validación del administrador.")
+                            else:
+                                cursor.execute("""
+                                    UPDATE hoja_almacen SET [PRECIO UNITARIO €] = ? WHERE CÓDIGO = ?
+                                """, (precio_neto, codigo_prod))
+                                str_module.success(f"¡Precio Neto calculado ({precio_neto:.2f} €), registrado y actualizado en el Almacén para '{nombre_prod}'!")
+
+                            conn.commit()
+                            conn.close()
+                            str_module.rerun()
+                    except Exception as e:
+                        str_module.error(f"Error al calcular el precio neto: {e}")
+        else:
+            str_module.info("No hay referencias en el inventario.")
 
 with pestana_movimientos:
     str_module.title("🔄 Entradas / Salidas de Género")
@@ -884,8 +877,8 @@ with pestana_ingenieria:
             str_module.markdown("### ⚙️ Registrar Elaboraciones en Ingeniería de Menú")
             with str_module.form("form_config_ingenieria"):
                 opciones_elab = [f"{row['CODIGO_RECETA']} - {row['NOMBRE_RECETA']}" for _, row in df_elaboraciones.iterrows()]
-                elab_sel = str_module.selectbox("Seleccionar Elaboración a incluir", opciones_elab)
-                btn_guardar_ing_menu = str_module.form_submit_button("💾 Añadir/Vincular à Ingeniería de Menú")
+                elab_sel = str_module.selectbox("Seleccionar Elaboración à incluir", opciones_elab)
+                btn_guardar_ing_menu = str_module.form_submit_button("💾 Añadir/Vincular a Ingeniería de Menú")
 
                 if btn_guardar_ing_menu:
                     try:
@@ -901,7 +894,7 @@ with pestana_ingenieria:
                         conn.commit()
                         conn.close()
 
-                        str_module.success(f"¡Elaboración '{nom_elab}' vinculada a la ingeniería de menú con éxito!")
+                        str_module.success(f"¡Elaboración '{nom_elab}' vinculada à la ingeniería de menú con éxito!")
                         str_module.rerun()
                     except Exception as e:
                         str_module.error(f"Error al guardar datos: {e}")
@@ -1503,7 +1496,7 @@ with pestana_facturacion:
                     tipo_doc = str_module.selectbox("Tipo de Documento", ["Impuestos (IVA / IRPF)", "Nomina / Seguros Sociales", "Licencia / Sanidad", "Factura Proveedor", "Otro"])
                 with cg_2:
                     desc_doc = str_module.text_input("Descripción / Observaciones")
-                    estado_doc = str_module.selectbox("Estado", ["Pendiente", "Enviado a Gestoría", "Completado / Archivo"])
+                    estado_doc = str_module.selectbox("Estado", ["Pendiente", "Enviado à Gestoría", "Completado / Archivo"])
                 with cg_3:
                     importe_doc = str_module.text_input("Importe asociado (€)", value="0.0")
                     str_module.markdown("<br>", unsafe_allow_html=True)
@@ -1586,5 +1579,3 @@ with pestana_facturacion:
             str_module.dataframe(df_control_alb, use_container_width=True, hide_index=True)
         else:
             str_module.info("No hay albaranes registrados todavía para analizar.")
-
-```
