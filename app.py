@@ -1765,4 +1765,3 @@ with pestana_escaner:
     modulo_escaner_stock()
 ```[cite: 5]
 
-```
