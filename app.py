@@ -1,4 +1,4 @@
-```python
+
 import streamlit as str_module
 import pandas as pd
 import sqlite3
@@ -1763,5 +1763,5 @@ with pestana_escaner:
             conn.close()
 
     modulo_escaner_stock()
-```[cite: 5]
+
 
