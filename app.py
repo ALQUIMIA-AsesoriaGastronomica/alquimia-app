@@ -323,7 +323,6 @@ if "autenticado" not in str_module.session_state:
     str_module.session_state["autenticado"] = False
     str_module.session_state["rol"] = None
 
-# Forzamos el acceso automático en Modo Administrador para cumplir estrictamente con tu petición
 str_module.session_state["autenticado"] = True
 str_module.session_state["rol"] = "admin"
 
