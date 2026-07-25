@@ -732,7 +732,7 @@ with pestana_principal:
         str_module.info("La base de datos está vacía actualmente.")
 
 with pestana_escandallos:
-    str_module.title("📊 Escandallos y Precios (Solo Visualización)")
+    str_module.title("📊 Escandallos y Precios")
     str_module.markdown("Consulta el registro de escandallos, precios netos y mermas calculadas.")
     str_module.markdown("---")
 
@@ -807,9 +807,53 @@ with pestana_escandallos:
 
 with pestana_movimientos:
     str_module.title("🔄 Entradas / Salidas de Género")
-    str_module.markdown("Gestión y registro de entradas y salidas de almacén.")
+    str_module.markdown("Gestión y registro de entradas (suma al stock) y salidas (descuenta del stock) en almacén.")
     str_module.markdown("---")
-    
+
+    if str_module.session_state["rol"] == "admin":
+        with str_module.form("form_reg_movimiento"):
+            mc1, mc2, mc3 = str_module.columns(3)
+            with mc1:
+                tipo_mov = str_module.selectbox("Tipo de Movimiento", ["ENTRADA", "SALIDA"])
+                df_inv_mov = ejecutar_sql("SELECT CÓDIGO, PRODUCTO, [STOCK ACTUAL EN ALMACÉN] FROM hoja_almacen")
+                opciones_inv_mov = [f"{row['CÓDIGO']} - {row['PRODUCTO']}" for _, row in df_inv_mov.iterrows()] if not df_inv_mov.empty else []
+                prod_mov_sel = str_module.selectbox("Producto", opciones_inv_mov)
+            with mc2:
+                cantidad_mov = str_module.text_input("Cantidad a Sumar / Descontar", value="0.0")
+                motivo_mov = str_module.text_input("Motivo / Proveedor / Destino", value="")
+            with mc3:
+                str_module.markdown("<br>", unsafe_allow_html=True)
+                btn_guardar_mov = str_module.form_submit_button("💾 Registrar Movimiento y Actualizar Stock")
+
+            if btn_guardar_mov and prod_mov_sel:
+                try:
+                    cant_val = float(str(cantidad_mov).strip().replace(',', '.') or 0.0)
+                    codigo_prod = prod_mov_sel.split(" - ")[0]
+                    nombre_prod = prod_mov_sel.split(" - ")[1]
+                    fecha_str = date.today().strftime("%Y-%m-%d")
+
+                    conn = sqlite3.connect(DB_NAME)
+                    cursor = conn.cursor()
+                    
+                    cursor.execute("""
+                        INSERT INTO movimientos_almacen (FECHA, TIPO, CÓDIGO, PRODUCTO, CANTIDAD, UNIDAD, MOTIVO)
+                        VALUES (?, ?, ?, ?, ?, 'Kg', ?)
+                    """, (fecha_str, tipo_mov, codigo_prod, nombre_prod, cant_val, motivo_mov))
+
+                    if tipo_mov == "ENTRADA":
+                        cursor.execute("UPDATE hoja_almacen SET [STOCK ACTUAL EN ALMACÉN] = [STOCK ACTUAL EN ALMACÉN] + ? WHERE CÓDIGO = ?", (cant_val, codigo_prod))
+                    else:
+                        cursor.execute("UPDATE hoja_almacen SET [STOCK ACTUAL EN ALMACÉN] = MAX(0.0, [STOCK ACTUAL EN ALMACÉN] - ?) WHERE CÓDIGO = ?", (cant_val, codigo_prod))
+
+                    conn.commit()
+                    conn.close()
+                    str_module.success(f"¡Movimiento de {tipo_mov} registrado y stock actualizado con éxito!")
+                    str_module.rerun()
+                except Exception as e:
+                    str_module.error(f"Error al registrar el movimiento: {e}")
+
+        str_module.markdown("---")
+
     df_movs_visualizar = ejecutar_sql("SELECT * FROM movimientos_almacen ORDER BY ID DESC LIMIT 50")
     if not df_movs_visualizar.empty:
         str_module.dataframe(df_movs_visualizar, use_container_width=True, hide_index=True)
@@ -818,9 +862,50 @@ with pestana_movimientos:
 
 with pestana_mermas:
     str_module.title("🗑️ Control de Mermas")
-    str_module.markdown("Registro y control de mermas de almacén.")
+    str_module.markdown("Registro y control de mermas de almacén (descuenta automáticamente el stock).")
     str_module.markdown("---")
-    
+
+    if str_module.session_state["rol"] == "admin":
+        with str_module.form("form_reg_merma"):
+            me1, me2, me3 = str_module.columns(3)
+            with me1:
+                tipo_merma = str_module.selectbox("Tipo de Merma", ["Caducidad", "Rotura / Deterioro", "Preparación / Limpieza", "Otro"])
+                df_inv_merma = ejecutar_sql("SELECT CÓDIGO, PRODUCTO FROM hoja_almacen")
+                opciones_merma = [f"{row['CÓDIGO']} - {row['PRODUCTO']}" for _, row in df_inv_merma.iterrows()] if not df_inv_merma.empty else []
+                prod_merma_sel = str_module.selectbox("Producto afectado", opciones_merma)
+            with me2:
+                cant_merma = str_module.text_input("Cantidad Merma", value="0.0")
+                obs_merma = str_module.text_input("Observaciones", value="")
+            with me3:
+                str_module.markdown("<br>", unsafe_allow_html=True)
+                btn_guardar_merma = str_module.form_submit_button("💾 Registrar Merma y Descontar Stock")
+
+            if btn_guardar_merma and prod_merma_sel:
+                try:
+                    cant_m_val = float(str(cant_merma).strip().replace(',', '.') or 0.0)
+                    codigo_prod = prod_merma_sel.split(" - ")[0]
+                    nombre_prod = prod_merma_sel.split(" - ")[1]
+                    fecha_str = date.today().strftime("%Y-%m-%d")
+
+                    conn = sqlite3.connect(DB_NAME)
+                    cursor = conn.cursor()
+                    
+                    cursor.execute("""
+                        INSERT INTO mermas_almacen (FECHA, TIPO_MERMA, CÓDIGO, PRODUCTO, CANTIDAD, UNIDAD, OBSERVACIONES)
+                        VALUES (?, ?, ?, ?, ?, 'Kg', ?)
+                    """, (fecha_str, tipo_merma, codigo_prod, nombre_prod, cant_m_val, obs_merma))
+
+                    cursor.execute("UPDATE hoja_almacen SET [STOCK ACTUAL EN ALMACÉN] = MAX(0.0, [STOCK ACTUAL EN ALMACÉN] - ?) WHERE CÓDIGO = ?", (cant_m_val, codigo_prod))
+
+                    conn.commit()
+                    conn.close()
+                    str_module.success("¡Merma registrada y stock descontado correctamente!")
+                    str_module.rerun()
+                except Exception as e:
+                    str_module.error(f"Error al registrar merma: {e}")
+
+        str_module.markdown("---")
+
     df_mermas_visualizar = ejecutar_sql("SELECT * FROM mermas_almacen ORDER BY ID DESC LIMIT 50")
     if not df_mermas_visualizar.empty:
         str_module.dataframe(df_mermas_visualizar, use_container_width=True, hide_index=True)
@@ -1579,4 +1664,3 @@ with pestana_facturacion:
             str_module.dataframe(df_control_alb, use_container_width=True, hide_index=True)
         else:
             str_module.info("No hay albaranes registrados todavía para analizar.")
-    
