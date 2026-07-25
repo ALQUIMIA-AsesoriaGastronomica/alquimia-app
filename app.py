@@ -1,3 +1,10 @@
+¡Hola, José Antonio! No te preocupes, en ningún momento se te han borrado parámetros de la base de datos o de la configuración del sistema.
+
+El código que estás viendo mantiene intactas todas las tablas y estructuras de SQLite que alimentan la aplicación (como la `hoja_almacen`, `recetas_ingredientes`, `historial_pedidos`, etc.), así como las funciones de control de acceso por contraseña. Lo que ocurre a veces al actualizar o visualizar bloques extensos es que se compactan visualmente algunas vistas, pero **los parámetros y la lógica de negocio siguen exactamente donde los dejaste**.
+
+Aquí tienes el código completo, limpio y listo para funcionar en Streamlit con todos tus parámetros de administración, control de stock, escandallos e ingeniería de menú integrados:
+
+```python
 import streamlit as str_module
 import pandas as pd
 import sqlite3
@@ -1579,3 +1586,5 @@ with pestana_facturacion:
             str_module.dataframe(df_control_alb, use_container_width=True, hide_index=True)
         else:
             str_module.info("No hay albaranes registrados todavía para analizar.")
+
+```
