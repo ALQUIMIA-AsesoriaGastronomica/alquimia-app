@@ -231,7 +231,6 @@ def inicializar_base_datos():
         )
     """)
 
-    # NUEVA TABLA PARA FACTURACIÓN Y GESTORÍA (Integrada sin romper nada)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS facturacion_gestoria (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -385,7 +384,6 @@ if str_module.sidebar.button("🔒 Cerrar Sesión"):
     str_module.session_state["rol"] = None
     str_module.rerun()
 
-# PESTAÑAS AMPLIADAS CON LA NUEVA PESTAÑA DE FACTURACIÓN Y GESTORÍA
 pestana_principal, pestana_escandallos, pestana_movimientos, pestana_mermas, pestana_recetas, pestana_ingenieria, pestana_eventos, pestana_pedidos, pestana_facturacion = str_module.tabs([
     "📦 Inventario y Almacén", 
     "📊 Escandallos / Precios",
@@ -668,66 +666,70 @@ with pestana_principal:
         str_module.info("La base de datos está vacía actualmente.")
 
 with pestana_escandallos:
-    str_module.title("📊 Escandallos y Precios (Solo Visualización)")
-    str_module.markdown("Consulta el registro de escandallos, precios netos y mermas calculadas.")
+    str_module.title("📊 Escandallos y Precios Netos")
+    str_module.markdown("Calcula los precios netos aplicando el porcentaje de merma y actualiza automáticamente el precio unitario en el inventario de almacén.")
     str_module.markdown("---")
 
     df_esc_guardados = ejecutar_sql("SELECT * FROM escandallos_precios")
     if not df_esc_guardados.empty:
         str_module.dataframe(df_esc_guardados, use_container_width=True, hide_index=True)
-        
-        if str_module.session_state["rol"] == "admin":
-            str_module.markdown("---")
-            str_module.markdown("### 📊 Registrar / Actualizar Escandallo")
-            df_inv_escandallo = ejecutar_sql("SELECT CÓDIGO, PRODUCTO FROM hoja_almacen")
-            if not df_inv_escandallo.empty:
-                opciones_inv_esc = [f"{row['CÓDIGO']} - {row['PRODUCTO']}" for _, row in df_inv_escandallo.iterrows()]
-
-                with str_module.form("form_escandallo_precios"):
-                    ce1, ce2, ce3 = str_module.columns(3)
-                    with ce1:
-                        producto_esc_sel = str_module.selectbox("Seleccionar Producto", opciones_inv_esc)
-                        precio_bruto_input = str_module.text_input("Precio Bruto (€)", value="0.0")
-                    with ce2:
-                        merma_input = str_module.text_input("Merma del Producto (%)", value="0.0")
-                    with ce3:
-                        str_module.markdown("<br>", unsafe_allow_html=True)
-                        btn_guardar_esc = str_module.form_submit_button("⚡ Calcular, Registrar y Actualizar Almacén")
-
-                    if btn_guardar_esc:
-                        try:
-                            p_bruto = float(str(precio_bruto_input).strip().replace(',', '.') or 0.0)
-                            p_merma = float(str(merma_input).strip().replace(',', '.') or 0.0)
-
-                            if p_merma >= 100:
-                                str_module.error("La merma no puede ser igual o superior al 100%.")
-                            else:
-                                denominador = (1.0 - (p_merma / 100.0))
-                                precio_neto = p_bruto / denominador if denominador > 0 else p_bruto
-
-                                codigo_prod = producto_esc_sel.split(" - ")[0]
-                                nombre_prod = producto_esc_sel.split(" - ")[1]
-
-                                conn = sqlite3.connect(DB_NAME)
-                                cursor = conn.cursor()
-                                cursor.execute("""
-                                    INSERT OR REPLACE INTO escandallos_precios (CÓDIGO, PRODUCTO, [PRECIO BRUTO], [MERMA %], [PRECIO NETO])
-                                    VALUES (?, ?, ?, ?, ?)
-                                """, (codigo_prod, nombre_prod, p_bruto, p_merma, precio_neto))
-                                cursor.execute("""
-                                    UPDATE hoja_almacen SET [PRECIO UNITARIO €] = ? WHERE CÓDIGO = ?
-                                """, (precio_neto, codigo_prod))
-                                conn.commit()
-                                conn.close()
-
-                                str_module.success(f"¡Precio Neto calculado ({precio_neto:.2f} €), registrado y actualizado en el Almacén para '{nombre_prod}'!")
-                                str_module.rerun()
-                        except Exception as e:
-                            str_module.error(f"Error al calcular el precio neto: {e}")
-            else:
-                str_module.info("No hay referencias en el inventario.")
+        str_module.markdown("---")
     else:
         str_module.info("Todavía no se ha registrado ningún escandallo de precios.")
+        str_module.markdown("---")
+
+    # Formulario siempre visible para el administrador
+    if str_module.session_state["rol"] == "admin":
+        str_module.markdown("### 📊 Registrar / Aktualizar Escandallo")
+        df_inv_escandallo = ejecutar_sql("SELECT CÓDIGO, PRODUCTO FROM hoja_almacen")
+        if not df_inv_escandallo.empty:
+            opciones_inv_esc = [f"{row['CÓDIGO']} - {row['PRODUCTO']}" for _, row in df_inv_escandallo.iterrows()]
+
+            with str_module.form("form_escandallo_precios"):
+                ce1, ce2, ce3 = str_module.columns(3)
+                with ce1:
+                    producto_esc_sel = str_module.selectbox("Seleccionar Producto", opciones_inv_esc)
+                    precio_bruto_input = str_module.text_input("Precio Bruto (€)", value="0.0")
+                with ce2:
+                    merma_input = str_module.text_input("Merma del Producto (%)", value="0.0")
+                with ce3:
+                    str_module.markdown("<br>", unsafe_allow_html=True)
+                    btn_guardar_esc = str_module.form_submit_button("⚡ Calcular, Registrar y Actualizar Almacén")
+
+                if btn_guardar_esc:
+                    try:
+                        p_bruto = float(str(precio_bruto_input).strip().replace(',', '.') or 0.0)
+                        p_merma = float(str(merma_input).strip().replace(',', '.') or 0.0)
+
+                        if p_merma >= 100:
+                            str_module.error("La merma no puede ser igual o superior al 100%.")
+                        else:
+                            denominador = (1.0 - (p_merma / 100.0))
+                            precio_neto = p_bruto / denominador if denominador > 0 else p_bruto
+
+                            codigo_prod = producto_esc_sel.split(" - ")[0]
+                            nombre_prod = producto_esc_sel.split(" - ")[1]
+
+                            conn = sqlite3.connect(DB_NAME)
+                            cursor = conn.cursor()
+                            cursor.execute("""
+                                INSERT OR REPLACE INTO escandallos_precios (CÓDIGO, PRODUCTO, [PRECIO BRUTO], [MERMA %], [PRECIO NETO])
+                                VALUES (?, ?, ?, ?, ?)
+                            """, (codigo_prod, nombre_prod, p_bruto, p_merma, precio_neto))
+                            cursor.execute("""
+                                UPDATE hoja_almacen SET [PRECIO UNITARIO €] = ? WHERE CÓDIGO = ?
+                            """, (precio_neto, codigo_prod))
+                            conn.commit()
+                            conn.close()
+
+                            str_module.success(f"¡Precio Neto calculado ({precio_neto:.2f} €), registrado y actualizado en el Almacén para '{nombre_prod}'!")
+                            str_module.rerun()
+                    except Exception as e:
+                        str_module.error(f"Error al calcular el precio neto: {e}")
+        else:
+            str_module.warning("⚠️ No hay referencias en el inventario de almacén. Debes añadir al menos un producto en la pestaña 'Inventario y Almacén' antes de poder realizar un escandallo.")
+    else:
+        str_module.info("Modo Cliente: Visualización de escandallos.")
 
 with pestana_movimientos:
     str_module.title("🔄 Entradas / Salidas de Género (Formulario Móvil)")
@@ -1359,7 +1361,6 @@ with pestana_pedidos:
         else:
             str_module.info("No hay proveedores registrados en la agenda.")
 
-# NUEVA PESTAÑA: FACTURACIÓN Y GESTORÍA
 with pestana_facturacion:
     str_module.title("📑 Facturación y Control para Gestoría")
     str_module.markdown("Registro, control de albaranes/facturas y preparación de informes mensuales para la asesoría contable.")
@@ -1453,5 +1454,3 @@ with pestana_facturacion:
             str_module.dataframe(df_facturas, use_container_width=True, hide_index=True)
         else:
             str_module.info("No hay registros de facturación en el rango de fechas seleccionado.")
-
- 
