@@ -231,52 +231,19 @@ def inicializar_base_datos():
         )
     """)
 
+    # NUEVA TABLA PARA FACTURACIÓN Y GESTORÍA (Integrada sin romper nada)
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS facturacion_ingresos (
+        CREATE TABLE IF NOT EXISTS facturacion_gestoria (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            FECHA TEXT,
-            CONCEPTO TEXT,
-            CATEGORIA TEXT,
+            FECHA_REGISTRO TEXT,
+            TIPO_DOCUMENTO TEXT,
+            PROVEEDOR_CLIENTE TEXT,
+            NUMERO_FACTURA TEXT UNIQUE,
             BASE_IMPONIBLE REAL,
-            TIPO_IVA REAL,
-            TOTAL REAL
-        )
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS gestoria_documentos (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            FECHA TEXT,
-            TIPO TEXT,
-            DESCRIPCION TEXT,
-            ESTADO TEXT,
-            IMPORTE REAL
-        )
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS precios_pendientes_validacion (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            FECHA TEXT,
-            PROVEEDOR TEXT,
-            CÓDIGO TEXT,
-            PRODUCTO TEXT,
-            PRECIO_ACTUAL REAL,
-            PRECIO_NUEVO REAL,
-            ESTADO TEXT
-        )
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS control_albaranes_facturas (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            FECHA TEXT,
-            PROVEEDOR TEXT,
-            NUMERO_PEDIDO TEXT,
-            NUMERO_ALBARAN TEXT UNIQUE,
-            IMPORTE_ALBARAN REAL,
-            TIENE_FACTURA TEXT,
-            NUMERO_FACTURA TEXT
+            IVA REAL,
+            TOTAL REAL,
+            ESTADO_PAGO TEXT,
+            OBSERVACIONES TEXT
         )
     """)
 
@@ -418,6 +385,7 @@ if str_module.sidebar.button("🔒 Cerrar Sesión"):
     str_module.session_state["rol"] = None
     str_module.rerun()
 
+# PESTAÑAS AMPLIADAS CON LA NUEVA PESTAÑA DE FACTURACIÓN Y GESTORÍA
 pestana_principal, pestana_escandallos, pestana_movimientos, pestana_mermas, pestana_recetas, pestana_ingenieria, pestana_eventos, pestana_pedidos, pestana_facturacion = str_module.tabs([
     "📦 Inventario y Almacén", 
     "📊 Escandallos / Precios",
@@ -436,38 +404,6 @@ with pestana_principal:
     str_module.markdown("---")
 
     if str_module.session_state["rol"] == "admin":
-        with str_module.expander("🔔 Alertas y Validación de Nuevos Precios de Proveedores"):
-            df_pendientes_precios = ejecutar_sql("SELECT * FROM precios_pendientes_validacion WHERE ESTADO = 'PENDIENTE'")
-            if not df_pendientes_precios.empty:
-                str_module.warning(f"Hay {len(df_pendientes_precios)} modificaciones de precios detectadas pendientes de tu aprobación.")
-                
-                for _, row_p in df_pendientes_precios.iterrows():
-                    col_ap1, col_ap2, col_ap3 = str_module.columns([3, 2, 2])
-                    with col_ap1:
-                        str_module.markdown(f"**{row_p['PRODUCTO']}** ({row_p['PROVEEDOR']})")
-                        str_module.text(f"Actual: {row_p['PRECIO_ACTUAL']} € ➡️ Nuevo detectado: {row_p['PRECIO_NUEVO']} €")
-                    with col_ap2:
-                        if str_module.button(f"✅ Aprobar", key=f"aprob_{row_p['ID']}"):
-                            conn = sqlite3.connect(DB_NAME)
-                            cursor = conn.cursor()
-                            cursor.execute("UPDATE hoja_almacen SET [PRECIO UNITARIO €] = ? WHERE CÓDIGO = ?", (row_p['PRECIO_NUEVO'], row_p['CÓDIGO']))
-                            cursor.execute("UPDATE precios_pendientes_validacion SET ESTADO = 'APROBADO' WHERE ID = ?", (row_p['ID'],))
-                            conn.commit()
-                            conn.close()
-                            str_module.success("¡Precio actualizado!")
-                            str_module.rerun()
-                    with col_ap3:
-                        if str_module.button(f"❌ Descartar", key=f"desc_{row_p['ID']}"):
-                            conn = sqlite3.connect(DB_NAME)
-                            cursor = conn.cursor()
-                            cursor.execute("UPDATE precios_pendientes_validacion SET ESTADO = 'DESCARTADO' WHERE ID = ?", (row_p['ID'],))
-                            conn.commit()
-                            conn.close()
-                            str_module.info("Cambio descartado.")
-                            str_module.rerun()
-            else:
-                str_module.info("No hay cambios de precios pendientes de revisión.")
-
         tab_nuevo, tab_eliminar = str_module.tabs(["➕ Añadir Nueva Referencia", "🗑️ Eliminar Referencias Antiguas"])
         
         with tab_nuevo:
@@ -732,84 +668,73 @@ with pestana_principal:
         str_module.info("La base de datos está vacía actualmente.")
 
 with pestana_escandallos:
-    str_module.title("📊 Escandallos y Precios Netos")
-    str_module.markdown("Calcula los precios netos aplicando el porcentaje de merma y actualiza automáticamente el precio unitario en el inventario de almacén.")
+    str_module.title("📊 Escandallos y Precios (Solo Visualización)")
+    str_module.markdown("Consulta el registro de escandallos, precios netos y mermas calculadas.")
     str_module.markdown("---")
 
     df_esc_guardados = ejecutar_sql("SELECT * FROM escandallos_precios")
     if not df_esc_guardados.empty:
         str_module.dataframe(df_esc_guardados, use_container_width=True, hide_index=True)
-    else:
-        str_module.info("Todavía no se ha registrado ningún escandallo de precios.")
+        
+        if str_module.session_state["rol"] == "admin":
+            str_module.markdown("---")
+            str_module.markdown("### 📊 Registrar / Actualizar Escandallo")
+            df_inv_escandallo = ejecutar_sql("SELECT CÓDIGO, PRODUCTO FROM hoja_almacen")
+            if not df_inv_escandallo.empty:
+                opciones_inv_esc = [f"{row['CÓDIGO']} - {row['PRODUCTO']}" for _, row in df_inv_escandallo.iterrows()]
 
-    if str_module.session_state["rol"] == "admin":
-        str_module.markdown("---")
-        str_module.markdown("### 📊 Registrar / Actualizar Escandallo")
-        df_inv_escandallo = ejecutar_sql("SELECT CÓDIGO, PRODUCTO, [PRECIO UNITARIO €] FROM hoja_almacen")
-        if not df_inv_escandallo.empty:
-            opciones_inv_esc = [f"{row['CÓDIGO']} - {row['PRODUCTO']}" for _, row in df_inv_escandallo.iterrows()]
+                with str_module.form("form_escandallo_precios"):
+                    ce1, ce2, ce3 = str_module.columns(3)
+                    with ce1:
+                        producto_esc_sel = str_module.selectbox("Seleccionar Producto", opciones_inv_esc)
+                        precio_bruto_input = str_module.text_input("Precio Bruto (€)", value="0.0")
+                    with ce2:
+                        merma_input = str_module.text_input("Merma del Producto (%)", value="0.0")
+                    with ce3:
+                        str_module.markdown("<br>", unsafe_allow_html=True)
+                        btn_guardar_esc = str_module.form_submit_button("⚡ Calcular, Registrar y Actualizar Almacén")
 
-            with str_module.form("form_escandallo_precios"):
-                ce1, ce2, ce3 = str_module.columns(3)
-                with ce1:
-                    producto_esc_sel = str_module.selectbox("Seleccionar Producto", opciones_inv_esc)
-                    precio_bruto_input = str_module.text_input("Precio Bruto (€)", value="0.0")
-                with ce2:
-                    merma_input = str_module.text_input("Merma del Producto (%)", value="0.0")
-                with ce3:
-                    str_module.markdown("<br>", unsafe_allow_html=True)
-                    btn_guardar_esc = str_module.form_submit_button("⚡ Calcular, Registrar y Actualizar Almacén")
+                    if btn_guardar_esc:
+                        try:
+                            p_bruto = float(str(precio_bruto_input).strip().replace(',', '.') or 0.0)
+                            p_merma = float(str(merma_input).strip().replace(',', '.') or 0.0)
 
-                if btn_guardar_esc:
-                    try:
-                        p_bruto = float(str(precio_bruto_input).strip().replace(',', '.') or 0.0)
-                        p_merma = float(str(merma_input).strip().replace(',', '.') or 0.0)
-
-                        if p_merma >= 100:
-                            str_module.error("La merma no puede ser igual o superior al 100%.")
-                        else:
-                            denominador = (1.0 - (p_merma / 100.0))
-                            precio_neto = p_bruto / denominador if denominador > 0 else p_bruto
-
-                            codigo_prod = producto_esc_sel.split(" - ")[0]
-                            nombre_prod = producto_esc_sel.split(" - ")[1]
-
-                            row_actual_prod = df_inv_escandallo[df_inv_escandallo['CÓDIGO'] == codigo_prod]
-                            precio_actual_db = float(row_actual_prod.iloc[0]['[PRECIO UNITARIO €]']) if not row_actual_prod.empty and '[PRECIO UNITARIO €]' in row_actual_prod.columns else 0.0
-
-                            conn = sqlite3.connect(DB_NAME)
-                            cursor = conn.cursor()
-                            cursor.execute("""
-                                INSERT OR REPLACE INTO escandallos_precios (CÓDIGO, PRODUCTO, [PRECIO BRUTO], [MERMA %], [PRECIO NETO])
-                                VALUES (?, ?, ?, ?, ?)
-                            """, (codigo_prod, nombre_prod, p_bruto, p_merma, precio_neto))
-
-                            if precio_actual_db > 0 and abs(precio_neto - precio_actual_db) > 0.001:
-                                cursor.execute("""
-                                    INSERT INTO precios_pendientes_validacion (FECHA, PROVEEDOR, CÓDIGO, PRODUCTO, PRECIO_ACTUAL, PRECIO_NUEVO, ESTADO)
-                                    SELECT ?, PROVEEDOR, ?, ?, ?, ?, 'PENDIENTE'
-                                    FROM hoja_almacen WHERE CÓDIGO = ?
-                                """, (date.today().strftime("%Y-%m-%d"), codigo_prod, nombre_prod, precio_actual_db, precio_neto, codigo_prod))
-                                str_module.warning("⚠️ Se ha detectado una diferencia con el precio actual. El cambio se ha enviado a la bandeja de validación del administrador.")
+                            if p_merma >= 100:
+                                str_module.error("La merma no puede ser igual o superior al 100%.")
                             else:
+                                denominador = (1.0 - (p_merma / 100.0))
+                                precio_neto = p_bruto / denominador if denominador > 0 else p_bruto
+
+                                codigo_prod = producto_esc_sel.split(" - ")[0]
+                                nombre_prod = producto_esc_sel.split(" - ")[1]
+
+                                conn = sqlite3.connect(DB_NAME)
+                                cursor = conn.cursor()
+                                cursor.execute("""
+                                    INSERT OR REPLACE INTO escandallos_precios (CÓDIGO, PRODUCTO, [PRECIO BRUTO], [MERMA %], [PRECIO NETO])
+                                    VALUES (?, ?, ?, ?, ?)
+                                """, (codigo_prod, nombre_prod, p_bruto, p_merma, precio_neto))
                                 cursor.execute("""
                                     UPDATE hoja_almacen SET [PRECIO UNITARIO €] = ? WHERE CÓDIGO = ?
                                 """, (precio_neto, codigo_prod))
-                                str_module.success(f"¡Precio Neto calculado ({precio_neto:.2f} €), registrado y actualizado en el Almacén para '{nombre_prod}'!")
+                                conn.commit()
+                                conn.close()
 
-                            conn.commit()
-                            conn.close()
-                            str_module.rerun()
-                    except Exception as e:
-                        str_module.error(f"Error al calcular el precio neto: {e}")
-        else:
-            str_module.info("No hay referencias en el inventario.")
+                                str_module.success(f"¡Precio Neto calculado ({precio_neto:.2f} €), registrado y actualizado en el Almacén para '{nombre_prod}'!")
+                                str_module.rerun()
+                        except Exception as e:
+                            str_module.error(f"Error al calcular el precio neto: {e}")
+            else:
+                str_module.info("No hay referencias en el inventario.")
+    else:
+        str_module.info("Todavía no se ha registrado ningún escandallo de precios.")
 
 with pestana_movimientos:
-    str_module.title("🔄 Entradas / Salidas de Género")
-    str_module.markdown("Gestión y registro de entradas y salidas de almacén.")
+    str_module.title("🔄 Entradas / Salidas de Género (Formulario Móvil)")
+    str_module.markdown("Las entradas y salidas de género se gestionan exclusivamente desde el formulario optimizado para móvil con lector de códigos.")
     str_module.markdown("---")
     
+    str_module.info("📱 Parámetros de registro actuales (Visualización habilitada para todos los usuarios):")
     df_movs_visualizar = ejecutar_sql("SELECT * FROM movimientos_almacen ORDER BY ID DESC LIMIT 50")
     if not df_movs_visualizar.empty:
         str_module.dataframe(df_movs_visualizar, use_container_width=True, hide_index=True)
@@ -817,10 +742,11 @@ with pestana_movimientos:
         str_module.info("No hay registros de entradas/salidas todavía.")
 
 with pestana_mermas:
-    str_module.title("🗑️ Control de Mermas")
-    str_module.markdown("Registro y control de mermas de almacén.")
+    str_module.title("🗑️ Control de Mermas (Formulario Móvil)")
+    str_module.markdown("El registro de mermas se realiza exclusivamente desde el formulario móvil con soporte para escaneo de códigos.")
     str_module.markdown("---")
     
+    str_module.info("📱 Parámetros de registro actuales de mermas (Visualización habilitada para todos los usuarios):")
     df_mermas_visualizar = ejecutar_sql("SELECT * FROM mermas_almacen ORDER BY ID DESC LIMIT 50")
     if not df_mermas_visualizar.empty:
         str_module.dataframe(df_mermas_visualizar, use_container_width=True, hide_index=True)
@@ -877,7 +803,7 @@ with pestana_ingenieria:
             str_module.markdown("### ⚙️ Registrar Elaboraciones en Ingeniería de Menú")
             with str_module.form("form_config_ingenieria"):
                 opciones_elab = [f"{row['CODIGO_RECETA']} - {row['NOMBRE_RECETA']}" for _, row in df_elaboraciones.iterrows()]
-                elab_sel = str_module.selectbox("Seleccionar Elaboración à incluir", opciones_elab)
+                elab_sel = str_module.selectbox("Seleccionar Elaboración a incluir", opciones_elab)
                 btn_guardar_ing_menu = str_module.form_submit_button("💾 Añadir/Vincular a Ingeniería de Menú")
 
                 if btn_guardar_ing_menu:
@@ -894,7 +820,7 @@ with pestana_ingenieria:
                         conn.commit()
                         conn.close()
 
-                        str_module.success(f"¡Elaboración '{nom_elab}' vinculada à la ingeniería de menú con éxito!")
+                        str_module.success(f"¡Elaboración '{nom_elab}' vinculada a la ingeniería de menú con éxito!")
                         str_module.rerun()
                     except Exception as e:
                         str_module.error(f"Error al guardar datos: {e}")
@@ -1433,149 +1359,99 @@ with pestana_pedidos:
         else:
             str_module.info("No hay proveedores registrados en la agenda.")
 
+# NUEVA PESTAÑA: FACTURACIÓN Y GESTORÍA
 with pestana_facturacion:
-    str_module.title("📑 Facturación y Gestoría")
-    str_module.markdown("Control de ingresos, registros contables y documentación para gestoría.")
+    str_module.title("📑 Facturación y Control para Gestoría")
+    str_module.markdown("Registro, control de albaranes/facturas y preparación de informes mensuales para la asesoría contable.")
     str_module.markdown("---")
 
-    tab_ingresos, tab_gestoria_docs, tab_conciliacion = str_module.tabs(["💵 Registro de Ingresos", "📂 Documentos y Gestoría", "🔍 Conciliación Albaranes / Facturas"])
+    sub_fact_reg, sub_fact_con = str_module.tabs(["➕ Registrar Factura / Albarán", "📊 Consulta y Resumen Contable"])
 
-    with tab_ingresos:
-        str_module.markdown("### 📊 Control de Ingresos y Facturación")
+    with sub_fact_reg:
         if str_module.session_state["rol"] == "admin":
-            with str_module.form("form_nuevo_ingreso"):
-                c_i1, c_i2, c_i3 = str_module.columns(3)
-                with c_i1:
-                    fecha_ingreso = str_module.date_input("Fecha", value=date.today())
-                    concepto_ingreso = str_module.text_input("Concepto / Descripción")
-                with c_i2:
-                    categoria_ingreso = str_module.selectbox("Categoría", ["Restaurante / Sala", "Eventos", "Take Away / Delivery", "Otros"])
-                    base_imponible = str_module.text_input("Base Imponible (€)", value="0.0")
-                with c_i3:
-                    tipo_iva = str_module.selectbox("Tipo IVA (%)", [10.0, 21.0, 4.0, 0.0])
-                    str_module.markdown("<br>", unsafe_allow_html=True)
-                    btn_guardar_ingreso = str_module.form_submit_button("💾 Guardar Ingreso")
-
-                if btn_guardar_ingreso:
-                    try:
-                        bi = float(str(base_imponible).strip().replace(',', '.') or 0.0)
-                        total_calculado = bi * (1.0 + (tipo_iva / 100.0))
-                        f_str = fecha_ingreso.strftime("%Y-%m-%d")
-
-                        conn = sqlite3.connect(DB_NAME)
-                        cursor = conn.cursor()
-                        cursor.execute("""
-                            INSERT INTO facturacion_ingresos (FECHA, CONCEPTO, CATEGORIA, BASE_IMPONIBLE, TIPO_IVA, TOTAL)
-                            VALUES (?, ?, ?, ?, ?, ?)
-                        """, (f_str, concepto_ingreso, categoria_ingreso, bi, tipo_iva, total_calculado))
-                        conn.commit()
-                        conn.close()
-
-                        str_module.success("¡Ingreso registrado correctamente!")
-                        str_module.rerun()
-                    except Exception as e:
-                        str_module.error(f"Error al registrar ingreso: {e}")
-
-        str_module.markdown("---")
-        df_ingresos = ejecutar_sql("SELECT * FROM facturacion_ingresos ORDER BY ID DESC")
-        if not df_ingresos.empty:
-            total_facturado = df_ingresos['TOTAL'].sum()
-            total_base = df_ingresos['BASE_IMPONIBLE'].sum()
-            str_module.metric("Total Facturación Acumulada", f"{total_facturado:.2f} €", f"Base: {total_base:.2f} €")
-            str_module.dataframe(df_ingresos, use_container_width=True, hide_index=True)
-        else:
-            str_module.info("No hay registros de ingresos todavía.")
-
-    with tab_gestoria_docs:
-        str_module.markdown("### 📂 Documentación para Gestoría y Trámites")
-        if str_module.session_state["rol"] == "admin":
-            with str_module.form("form_nuevo_doc_gestoria"):
-                cg_1, cg_2, cg_3 = str_module.columns(3)
-                with cg_1:
-                    fecha_doc = str_module.date_input("Fecha Documento", value=date.today(), key="doc_f")
-                    tipo_doc = str_module.selectbox("Tipo de Documento", ["Impuestos (IVA / IRPF)", "Nomina / Seguros Sociales", "Licencia / Sanidad", "Factura Proveedor", "Otro"])
-                with cg_2:
-                    desc_doc = str_module.text_input("Descripción / Observaciones")
-                    estado_doc = str_module.selectbox("Estado", ["Pendiente", "Enviado à Gestoría", "Completado / Archivo"])
-                with cg_3:
-                    importe_doc = str_module.text_input("Importe asociado (€)", value="0.0")
-                    str_module.markdown("<br>", unsafe_allow_html=True)
-                    btn_guardar_doc = str_module.form_submit_button("💾 Registrar Documento")
-
-                if btn_guardar_doc:
-                    try:
-                        imp = float(str(importe_doc).strip().replace(',', '.') or 0.0)
-                        f_str_d = fecha_doc.strftime("%Y-%m-%d")
-
-                        conn = sqlite3.connect(DB_NAME)
-                        cursor = conn.cursor()
-                        cursor.execute("""
-                            INSERT INTO gestoria_documentos (FECHA, TIPO, DESCRIPCION, ESTADO, IMPORTE)
-                            VALUES (?, ?, ?, ?, ?)
-                        """, (f_str_d, tipo_doc, desc_doc, estado_doc, imp))
-                        conn.commit()
-                        conn.close()
-
-                        str_module.success("¡Documento registrado correctamente para gestoría!")
-                        str_module.rerun()
-                    except Exception as e:
-                        str_module.error(f"Error al registrar documento: {e}")
-
-        str_module.markdown("---")
-        df_docs = ejecutar_sql("SELECT * FROM gestoria_documentos ORDER BY ID DESC")
-        if not df_docs.empty:
-            str_module.dataframe(df_docs, use_container_width=True, hide_index=True)
-        else:
-            str_module.info("No hay documentos registrados para gestoría.")
-
-    with tab_conciliacion:
-        str_module.markdown("### 🔍 Conciliación de Albaranes y Facturas por Proveedor")
-
-        with str_module.form("form_registrar_albaran_factura"):
-            ca1, ca2, ca3 = str_module.columns(3)
-            with ca1:
-                prov_alb = str_module.text_input("Proveedor")
-                num_ped_rel = str_module.text_input("Nº Pedido Relacionado (Opcional)")
-            with ca2:
-                num_alb = str_module.text_input("Nº de Albarán")
-                importe_alb = str_module.text_input("Importe del Albarán (€)", value="0.0")
-            with ca3:
-                tiene_fac = str_module.selectbox("¿Tiene Factura Asociada?", ["NO", "SI"])
-                num_fac_rel = str_module.text_input("Nº de Factura (si la tiene)")
+            with str_module.form("form_registrar_factura"):
+                f_col1, f_col2, f_col3 = str_module.columns(3)
+                with f_col1:
+                    tipo_doc = str_module.selectbox("Tipo de Documento", ["Factura de Proveedor", "Factura de Cliente / Ticket", "Albarán"])
+                    prov_cli_input = str_module.text_input("Proveedor o Cliente")
+                with f_col2:
+                    num_fac_input = str_module.text_input("Número de Factura / Documento")
+                    base_imp_input = str_module.text_input("Base Imponible (€)", value="0.0")
+                with f_col3:
+                    iva_input = str_module.text_input("IVA (€)", value="0.0")
+                    total_fac_input = str_module.text_input("Total (€)", value="0.0")
                 
-            btn_guardar_alb = str_module.form_submit_button("📥 Registrar Albarán y Verificar Estado")
-            
-            if btn_guardar_alb:
-                try:
-                    imp_val = float(str(importe_alb).strip().replace(',', '.') or 0.0)
-                    conn = sqlite3.connect(DB_NAME)
-                    cursor = conn.cursor()
-                    cursor.execute("""
-                        INSERT OR REPLACE INTO control_albaranes_facturas 
-                        (FECHA, PROVEEDOR, NUMERO_PEDIDO, NUMERO_ALBARAN, IMPORTE_ALBARAN, TIENE_FACTURA, NUMERO_FACTURA)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (date.today().strftime("%Y-%m-%d"), prov_alb, num_ped_rel, num_alb, imp_val, tiene_fac, num_fac_rel))
-                    conn.commit()
-                    conn.close()
-                    str_module.success("¡Albarán registrado correctamente en el sistema de control!")
-                    str_module.rerun()
-                except Exception as e:
-                    str_module.error(f"Error al registrar: {e}")
+                f_col4, f_col5 = str_module.columns(2)
+                with f_col4:
+                    estado_pago_sel = str_module.selectbox("Estado de Pago", ["Pendiente", "Pagado", "Contabilizado"])
+                with f_col5:
+                    obs_fac_input = str_module.text_input("Observaciones / Concepto", value="")
 
-        str_module.markdown("---")
-        str_module.markdown("### 📋 Albaranes Pendientes de Factura")
+                btn_guardar_fac = str_module.form_submit_button("💾 Guardar Documento en Contabilidad")
 
-        df_control_alb = ejecutar_sql("SELECT * FROM control_albaranes_facturas ORDER BY FECHA DESC")
-        if not df_control_alb.empty:
-            df_faltan_factura = df_control_alb[df_control_alb['TIENE_FACTURA'] == 'NO']
-            
-            if not df_faltan_factura.empty:
-                str_module.warning(f"⚠️ Se han detectado {len(df_faltan_factura)} albaranes pendientes de recibir o asociar su factura correspondiente.")
-                str_module.dataframe(df_faltan_factura, use_container_width=True, hide_index=True)
-            else:
-                str_module.success("✅ Todos los albaranes registrados tienen su factura asociada correctamente.")
-                
-            str_module.markdown("#### Histórico General de Albaranes")
-            str_module.dataframe(df_control_alb, use_container_width=True, hide_index=True)
+                if btn_guardar_fac:
+                    if not num_fac_input.strip() or not prov_cli_input.strip():
+                        str_module.error("El proveedor/cliente y el número de factura son obligatorios.")
+                    else:
+                        try:
+                            def limpiar_f(v):
+                                return float(str(v).strip().replace(',', '.') or 0.0)
+
+                            b_imp = limpiar_f(base_imp_input)
+                            iva_val = limpiar_f(iva_input)
+                            tot_val = limpiar_f(total_fac_input)
+                            fecha_hoy_str = date.today().strftime("%Y-%m-%d")
+
+                            conn = sqlite3.connect(DB_NAME)
+                            cursor = conn.cursor()
+                            cursor.execute("""
+                                INSERT OR REPLACE INTO facturacion_gestoria 
+                                (FECHA_REGISTRO, TIPO_DOCUMENTO, PROVEEDOR_CLIENTE, NUMERO_FACTURA, BASE_IMPONIBLE, IVA, TOTAL, ESTADO_PAGO, OBSERVACIONES)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (fecha_hoy_str, tipo_doc, prov_cli_input.strip(), num_fac_input.strip(), b_imp, iva_val, tot_val, estado_pago_sel, obs_fac_input))
+                            conn.commit()
+                            conn.close()
+
+                            str_module.success(f"¡Documento '{num_fac_input}' registrado correctamente para la gestoría!")
+                            str_module.rerun()
+                        except Exception as e:
+                            str_module.error(f"Error al registrar la factura: {e}")
         else:
-            str_module.info("No hay albaranes registrados todavía para analizar.")
+            str_module.warning("Acceso restringido al Administrador para registrar documentos fiscales.")
+
+    with sub_fact_con:
+        str_module.markdown("### 📅 Filtrar Periodo Contable")
+        fc1, fc2 = str_module.columns(2)
+        with fc1:
+            f_ini_fac = str_module.date_input("Fecha Inicio", value=date.today().replace(day=1), key="fi_fac")
+        with fc2:
+            f_fin_fac = str_module.date_input("Fecha Fin", value=date.today(), key="ff_fac")
+
+        str_fini = f_ini_fac.strftime("%Y-%m-%d")
+        str_ffin = f_fin_fac.strftime("%Y-%m-%d")
+
+        df_facturas = ejecutar_sql("""
+            SELECT * FROM facturacion_gestoria 
+            WHERE FECHA_REGISTRO BETWEEN ? AND ? 
+            ORDER BY ID DESC
+        """, (str_fini, str_ffin))
+
+        if not df_facturas.empty:
+            total_base = df_facturas['BASE_IMPONIBLE'].sum()
+            total_iva = df_facturas['IVA'].sum()
+            total_general = df_facturas['TOTAL'].sum()
+
+            fm1, fm2, fm3 = str_module.columns(3)
+            with fm1:
+                str_module.metric("Base Imponible Acumulada", f"{total_base:.2f} €")
+            with fm2:
+                str_module.metric("IVA Acumulado", f"{total_iva:.2f} €")
+            with fm3:
+                str_module.metric("Total Facturado / Gastos", f"{total_general:.2f} €")
+
+            str_module.markdown("---")
+            str_module.dataframe(df_facturas, use_container_width=True, hide_index=True)
+        else:
+            str_module.info("No hay registros de facturación en el rango de fechas seleccionado.")
+
+ 
