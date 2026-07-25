@@ -472,37 +472,104 @@ with pestana_principal:
         
         with tab_nuevo:
             with str_module.form("form_nueva_ref"):
-                c1, c2, c3 = str_module.columns(3)
-                with c1:
-                    prov_input = str_module.text_input("Proveedor", value="")
-                    codigo_input = str_module.text_input("Código (Ej: PROV-01 o ELAB-01)")
-                    producto_input = str_module.text_input("Nombre del Producto")
-                with c2:
-                    unidad_input = str_module.selectbox("Unidad de Medida", ["Kg", "Litro", "Unidad", "Gramos", "Cl"])
-                    precio_input = str_module.text_input("Precio Unitario (€)", value="0.0")
-                    stock_act_input = str_module.text_input("Stock Actual", value="0.0")
-                with c3:
-                    stock_min_input = str_module.text_input("Stock Mínimo", value="0.0")
-                    gasto_mensual_input = str_module.text_input("Gasto Mensual Estimado (€)", value="0.0")
+with pestana_recetas:
+    str_module.title("📖 Recetario Actual y Creación de Elaboraciones")
+    str_module.markdown("Crea nuevas recetas, define sus ingredientes base desde el almacén y calcula su escandallo de coste.")
+    str_module.markdown("---")
 
-                btn_guardar_ref = str_module.form_submit_button("💾 Guardar Referencia en Base de Datos")
+    # Visualización de recetas existentes
+    df_recetas_cab = ejecutar_sql("SELECT DISTINCT NOMBRE_RECETA, CODIGO_RECETA FROM recetas_cabecera")
+    if not df_recetas_cab.empty:
+        receta_seleccionada_ver = str_module.selectbox("Selecciona una receta para ver sus ingredientes", df_recetas_cab['NOMBRE_RECETA'].tolist(), key="sel_receta_ver")
+        
+        if receta_seleccionada_ver:
+            df_ing_receta = ejecutar_sql("""
+                SELECT ri.CODIGO_PRODUCTO AS CÓDIGO, ri.PRODUCTO, ri.CANTIDAD, ri.UNIDAD, 
+                       COALESCE(ha.[PRECIO UNITARIO €], 0.0) AS [PRECIO UNITARIO €],
+                       (ri.CANTIDAD * COALESCE(ha.[PRECIO UNITARIO €], 0.0)) AS [COSTE TOTAL €]
+                FROM recetas_ingredientes ri
+                LEFT JOIN hoja_almacen ha ON ri.CODIGO_PRODUCTO = ha.CÓDIGO
+                WHERE ri.NOMBRE_RECETA = ?
+            """, (receta_seleccionada_ver,))
+            
+            str_module.markdown(f"#### 🥣 Ingredientes de: **{receta_seleccionada_ver}**")
+            if not df_ing_receta.empty:
+                str_module.dataframe(df_ing_receta, use_container_width=True, hide_index=True)
+                coste_total_receta = df_ing_receta['COSTE TOTAL €'].sum()
+                str_module.markdown(f"### 💰 **Coste Total de Producción:** `{coste_total_receta:.2f} €`")
+            else:
+                str_module.info("Esta receta no tiene ingredientes registrados.")
+    else:
+        str_module.info("Todavía no se ha creado ninguna receta.")
 
-                if btn_guardar_ref:
-                    if not codigo_input or not producto_input:
-                        str_module.error("Por favor, rellena al menos el Código y el Nombre del producto.")
+    # Panel exclusivo de Administrador para crear y modificar
+    if str_module.session_state.get("rol") == "admin":
+        str_module.markdown("---")
+        str_module.markdown("### ➕ Panel de Administración: Crear Receta e Ingredientes")
+        
+        col_admin1, col_admin2 = str_module.columns(2)
+        
+        with col_admin1:
+            str_module.markdown("#### 1️⃣ Nueva Cabecera de Receta")
+            with str_module.form("form_crear_receta_cabecera"):
+                cod_receta_input = str_module.text_input("Código de Receta (Ej: ELAB-01)")
+                nombre_receta_input = str_module.text_input("Nombre de la Receta / Plato")
+                btn_crear_cab = str_module.form_submit_button("💾 Crear Receta")
+                
+                if btn_crear_cab:
+                    if not cod_receta_input or not nombre_receta_input:
+                        str_module.error("Introduce un código y un nombre.")
                     else:
                         try:
-                            def limpiar_float(val):
-                                val_str = str(val).strip().replace(',', '.')
-                                return float(val_str) if val_str else 0.0
+                            conn = sqlite3.connect(DB_NAME)
+                            cursor = conn.cursor()
+                            cursor.execute("""
+                                INSERT OR IGNORE INTO recetas_cabecera (CODIGO_RECETA, NOMBRE_RECETA)
+                                VALUES (?, ?)
+                            """, (cod_receta_input.upper(), nombre_receta_input))
+                            conn.commit()
+                            conn.close()
+                            str_module.success(f"¡Receta '{nombre_receta_input}' creada!")
+                            str_module.rerun()
+                        except Exception as e:
+                            str_module.error(f"Error: {e}")
 
-                            p_val = limpiar_float(precio_input)
-                            s_act = limpiar_float(stock_act_input)
-                            s_min = limpiar_float(stock_min_input)
-                            g_mes = limpiar_float(gasto_mensual_input)
+        with col_admin2:
+            str_module.markdown("#### 2️⃣ Añadir Ingrediente a Receta")
+            df_recetas_actuales = ejecutar_sql("SELECT NOMBRE_RECETA FROM recetas_cabecera")
+            df_inv_ing = ejecutar_sql("SELECT CÓDIGO, PRODUCTO, UNIDAD FROM hoja_almacen")
+
+            if not df_recetas_actuales.empty and not df_inv_ing.empty:
+                with str_module.form("form_añadir_ingrediente_receta"):
+                    receta_destino = str_module.selectbox("Seleccionar Receta", df_recetas_actuales['NOMBRE_RECETA'].tolist())
+                    opciones_inv = [f"{row['CÓDIGO']} - {row['PRODUCTO']} ({row['UNIDAD']})" for _, row in df_inv_ing.iterrows()]
+                    prod_inv_sel = str_module.selectbox("Ingrediente del Almacén", opciones_inv)
+                    cantidad_ing_receta = str_module.text_input("Cantidad necesaria", value="0.0")
+                    btn_add_ing = str_module.form_submit_button("➕ Añadir Ingrediente")
+
+                    if btn_add_ing:
+                        try:
+                            cant_val = float(str(cantidad_ing_receta).strip().replace(',', '.') or 0.0)
+                            partes = prod_inv_sel.split(" - ")
+                            c_prod = partes[0]
+                            p_prod = partes[1].split(" (")[0]
+                            u_prod = partes[1].split(" (")[1].replace(")", "")
 
                             conn = sqlite3.connect(DB_NAME)
                             cursor = conn.cursor()
+                            cursor.execute("""
+                                INSERT INTO recetas_ingredientes (NOMBRE_RECETA, CODIGO_PRODUCTO, PRODUCTO, CANTIDAD, UNIDAD)
+                                VALUES (?, ?, ?, ?, ?)
+                            """, (receta_destino, c_prod, p_prod, cant_val, u_prod))
+                            conn.commit()
+                            conn.close()
+
+                            str_module.success(f"¡Ingrediente añadido con éxito!")
+                            str_module.rerun()
+                        except Exception as e:
+                            str_module.error(f"Error al añadir: {e}")
+            else:
+                str_module.info("Crea una receta primero y ten productos en el almacén.")
                             cursor.execute("""
                                 INSERT OR REPLACE INTO hoja_almacen (PROVEEDOR, CÓDIGO, PRODUCTO, UNIDAD, [PRECIO UNITARIO €], [STOCK ACTUAL EN ALMACÉN], [STOCK MÍNIMO], [GASTO MENSUAL €])
                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
