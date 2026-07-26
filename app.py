@@ -323,8 +323,40 @@ if "autenticado" not in str_module.session_state:
     str_module.session_state["autenticado"] = False
     str_module.session_state["rol"] = None
 
-str_module.session_state["autenticado"] = True
-str_module.session_state["rol"] = "admin"
+if not str_module.session_state["autenticado"]:
+    col_logo, col_titulo = str_module.columns([0.1, 0.9])
+    with col_logo:
+        if logo_img:
+            str_module.image(logo_img, width=65)
+        else:
+            str_module.markdown("🍳")
+    with col_titulo:
+        str_module.markdown("""
+            <div>
+                <h1 style="margin-bottom: 0px; font-size: 2.5rem; padding-top: 5px;">Restaurante General Jam</h1>
+                <p style="color: #9ca3af; font-size: 1.1rem; margin-top: 0px; margin-bottom: 25px;">Alquimia by J.A.Torres chef — Software De Gestión Integral De Hostelería y Restauración Organizada - Acceso</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+    str_module.markdown("Por favor, introduce tu contraseña de acceso para continuar.")
+    str_module.markdown("---")
+    
+    with str_module.form("form_login"):
+        pwd_input = str_module.text_input("Contraseña", type="password")
+        btn_login = str_module.form_submit_button("Acceder a la Plataforma")
+        
+        if btn_login:
+            if pwd_input == "Pcx121224":
+                str_module.session_state["autenticado"] = True
+                str_module.session_state["rol"] = "admin"
+                str_module.rerun()
+            elif pwd_input == "Tajogaite2025":
+                str_module.session_state["autenticado"] = True
+                str_module.session_state["rol"] = "cliente"
+                str_module.rerun()
+            else:
+                str_module.error("Contraseña incorrecta. Inténtalo de nuevo.")
+    str_module.stop()
 
 if logo_img:
     str_module.sidebar.image(logo_img, use_container_width=True)
@@ -336,46 +368,49 @@ str_module.sidebar.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-str_module.sidebar.markdown("<p style='color: #38bdf8; font-size: 0.85rem; text-align: center;'>🔓 Modo: Administrador (Chef)</p>", unsafe_allow_html=True)
-
-with str_module.sidebar.expander("⚙️ Configuración Rápida de Logos"):
-    archivo_subido_logo = str_module.file_uploader("Subir nuevo logo (PNG/JPG)", type=["png", "jpg", "jpeg"])
-    if archivo_subido_logo is not None:
-        try:
-            nombre_guardado = f"logo_custom_{archivo_subido_logo.name}"
-            with open(nombre_guardado, "wb") as f:
-                f.write(archivo_subido_logo.getbuffer())
-            
-            conn = sqlite3.connect(DB_NAME)
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT OR REPLACE INTO configuracion_sistema (CLAVE, VALOR)
-                VALUES ('LOGO_ACTUAL', ?)
-            """, (nombre_guardado,))
-            conn.commit()
-            conn.close()
-            str_module.success("¡Logo actualizado con éxito! Recargando...")
-            str_module.rerun()
-        except Exception as e:
-            str_module.error(f"Error al guardar logo: {e}")
+if str_module.session_state["rol"] == "admin":
+    str_module.sidebar.markdown("<p style='color: #38bdf8; font-size: 0.85rem; text-align: center;'>🔓 Modo: Administrador (Chef)</p>", unsafe_allow_html=True)
     
-    logos_locales_disponibles = [f for f in ["logo_transparente.png", "logo_3.png", "logo_2.png", "logo.png"] if os.path.exists(f)]
-    if logos_locales_disponibles:
-        logo_predeterminado_sel = str_module.selectbox("O seleccionar logo existente", logos_locales_disponibles)
-        if str_module.button("Aplicar Logo Existente"):
+    with str_module.sidebar.expander("⚙️ Configuración Rápida de Logos"):
+        archivo_subido_logo = str_module.file_uploader("Subir nuevo logo (PNG/JPG)", type=["png", "jpg", "jpeg"])
+        if archivo_subido_logo is not None:
             try:
+                nombre_guardado = f"logo_custom_{archivo_subido_logo.name}"
+                with open(nombre_guardado, "wb") as f:
+                    f.write(archivo_subido_logo.getbuffer())
+                
                 conn = sqlite3.connect(DB_NAME)
                 cursor = conn.cursor()
                 cursor.execute("""
                     INSERT OR REPLACE INTO configuracion_sistema (CLAVE, VALOR)
                     VALUES ('LOGO_ACTUAL', ?)
-                """, (logo_predeterminado_sel,))
+                """, (nombre_guardado,))
                 conn.commit()
                 conn.close()
-                str_module.success("¡Logo predeterminado aplicado! Recargando...")
+                str_module.success("¡Logo actualizado con éxito! Recargando...")
                 str_module.rerun()
             except Exception as e:
-                str_module.error(f"Error: {e}")
+                str_module.error(f"Error al guardar logo: {e}")
+        
+        logos_locales_disponibles = [f for f in ["logo_transparente.png", "logo_3.png", "logo_2.png", "logo.png"] if os.path.exists(f)]
+        if logos_locales_disponibles:
+            logo_predeterminado_sel = str_module.selectbox("O seleccionar logo existente", logos_locales_disponibles)
+            if str_module.button("Aplicar Logo Existente"):
+                try:
+                    conn = sqlite3.connect(DB_NAME)
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        INSERT OR REPLACE INTO configuracion_sistema (CLAVE, VALOR)
+                        VALUES ('LOGO_ACTUAL', ?)
+                    """, (logo_predeterminado_sel,))
+                    conn.commit()
+                    conn.close()
+                    str_module.success("¡Logo predeterminado aplicado! Recargando...")
+                    str_module.rerun()
+                except Exception as e:
+                    str_module.error(f"Error: {e}")
+else:
+    str_module.sidebar.markdown("<p style='color: #fbbf24; font-size: 0.85rem; text-align: center;'>👁️‍🗨️ Modo: Cliente (Solo Lectura)</p>", unsafe_allow_html=True)
 
 str_module.sidebar.markdown("---")
 if str_module.sidebar.button("🔒 Cerrar Sesión"):
@@ -383,7 +418,7 @@ if str_module.sidebar.button("🔒 Cerrar Sesión"):
     str_module.session_state["rol"] = None
     str_module.rerun()
 
-pestana_principal, pestana_escandallos, pestana_movimientos, pestana_mermas, pestana_recetas, pestana_ingenieria, pestana_eventos, pestana_pedidos, pestana_facturacion, pestana_escaner = str_module.tabs([
+pestana_principal, pestana_escandallos, pestana_movimientos, pestana_mermas, pestana_recetas, pestana_ingenieria, pestana_eventos, pestana_pedidos, pestana_facturacion = str_module.tabs([
     "📦 Inventario y Almacén", 
     "📊 Escandallos / Precios",
     "🔄 Entradas / Salidas de Género", 
@@ -392,8 +427,7 @@ pestana_principal, pestana_escandallos, pestana_movimientos, pestana_mermas, pes
     "📈 Ingeniería de Menú",
     "🎉 Eventos / Menús Cerrados",
     "🛒 Gestión de Pedidos",
-    "📑 Facturación y Gestoría",
-    "📱 Escáner Móvil"
+    "📑 Facturación y Gestoría"
 ])
 
 with pestana_principal:
@@ -401,108 +435,110 @@ with pestana_principal:
     str_module.markdown("Control centralizado de stock, reposiciones, costes y referencias con desglose automático de productos **ELAB** por ingredientes de recetas.")
     str_module.markdown("---")
 
-    with str_module.expander("🔔 Alertas y Validación de Nuevos Precios de Proveedores"):
-        df_pendientes_precios = ejecutar_sql("SELECT * FROM precios_pendientes_validacion WHERE ESTADO = 'PENDIENTE'")
-        if not df_pendientes_precios.empty:
-            str_module.warning(f"Hay {len(df_pendientes_precios)} modificaciones de precios detectadas pendientes de tu aprobación.")
-            
-            for _, row_p in df_pendientes_precios.iterrows():
-                col_ap1, col_ap2, col_ap3 = str_module.columns([3, 2, 2])
-                with col_ap1:
-                    str_module.markdown(f"**{row_p['PRODUCTO']}** ({row_p['PROVEEDOR']})")
-                    str_module.text(f"Actual: {row_p['PRECIO_ACTUAL']} € ➡️ Nuevo detectado: {row_p['PRECIO_NUEVO']} €")
-                with col_ap2:
-                    if str_module.button(f"✅ Aprobar", key=f"aprob_{row_p['ID']}"):
-                        conn = sqlite3.connect(DB_NAME)
-                        cursor = conn.cursor()
-                        cursor.execute("UPDATE hoja_almacen SET [PRECIO UNITARIO €] = ? WHERE CÓDIGO = ?", (row_p['PRECIO_NUEVO'], row_p['CÓDIGO']))
-                        cursor.execute("UPDATE precios_pendientes_validacion SET ESTADO = 'APROBADO' WHERE ID = ?", (row_p['ID'],))
-                        conn.commit()
-                        conn.close()
-                        str_module.success("¡Precio actualizado!")
-                        str_module.rerun()
-                with col_ap3:
-                    if str_module.button(f"❌ Descartar", key=f"desc_{row_p['ID']}"):
-                        conn = sqlite3.connect(DB_NAME)
-                        cursor = conn.cursor()
-                        cursor.execute("UPDATE precios_pendientes_validacion SET ESTADO = 'DESCARTADO' WHERE ID = ?", (row_p['ID'],))
-                        conn.commit()
-                        conn.close()
-                        str_module.info("Cambio descartado.")
-                        str_module.rerun()
-        else:
-            str_module.info("No hay cambios de precios pendientes de revisión.")
-
-    tab_nuevo, tab_eliminar = str_module.tabs(["➕ Añadir Nueva Referencia", "🗑️ Eliminar Referencias Antiguas"])
-    
-    with tab_nuevo:
-        with str_module.form("form_nueva_ref"):
-            c1, c2, c3 = str_module.columns(3)
-            with c1:
-                prov_input = str_module.text_input("Proveedor", value="")
-                codigo_input = str_module.text_input("Código (Ej: PROV-01 o ELAB-01)")
-                producto_input = str_module.text_input("Nombre del Producto")
-            with c2:
-                unidad_input = str_module.selectbox("Unidad de Medida", ["Kg", "Litro", "Unidad", "Gramos", "Cl"])
-                precio_input = str_module.text_input("Precio Unitario (€)", value="0.0")
-                stock_act_input = str_module.text_input("Stock Actual", value="0.0")
-            with c3:
-                stock_min_input = str_module.text_input("Stock Mínimo", value="0.0")
-                gasto_mensual_input = str_module.text_input("Gasto Mensual Estimado (€)", value="0.0")
-
-            btn_guardar_ref = str_module.form_submit_button("💾 Guardar Referencia en Base de Datos")
-
-            if btn_guardar_ref:
-                if not codigo_input or not producto_input:
-                    str_module.error("Por favor, rellena al menos el Código y el Nombre del producto.")
-                else:
-                    try:
-                        def limpiar_float(val):
-                            val_str = str(val).strip().replace(',', '.')
-                            return float(val_str) if val_str else 0.0
-
-                        p_val = limpiar_float(precio_input)
-                        s_act = limpiar_float(stock_act_input)
-                        s_min = limpiar_float(stock_min_input)
-                        g_mes = limpiar_float(gasto_mensual_input)
-
-                        conn = sqlite3.connect(DB_NAME)
-                        cursor = conn.cursor()
-                        cursor.execute("""
-                            INSERT OR REPLACE INTO hoja_almacen (PROVEEDOR, CÓDIGO, PRODUCTO, UNIDAD, [PRECIO UNITARIO €], [STOCK ACTUAL EN ALMACÉN], [STOCK MÍNIMO], [GASTO MENSUAL €])
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (prov_input, codigo_input, producto_input, unidad_input, p_val, s_act, s_min, g_mes))
-                        conn.commit()
-                        conn.close()
-                        str_module.success(f"¡Referencia '{producto_input}' guardada con éxito!")
-                        str_module.rerun()
-                    except Exception as e:
-                        str_module.error(f"Error al guardar: {e}")
-
-    with tab_eliminar:
-        df_actual = ejecutar_sql("SELECT CÓDIGO, PRODUCTO FROM hoja_almacen")
-        if not df_actual.empty:
-            opciones_eliminar = [f"{row['CÓDIGO']} - {row['PRODUCTO']}" for _, row in df_actual.iterrows()]
-            with str_module.form("form_eliminar_ref"):
-                ref_a_borrar = str_module.selectbox("Selecciona la referencia que deseas eliminar", opciones_eliminar)
-                btn_borrar = str_module.form_submit_button("🗑️ Eliminar Referencia Seleccionada")
+    if str_module.session_state["rol"] == "admin":
+        with str_module.expander("🔔 Alertas y Validación de Nuevos Precios de Proveedores"):
+            df_pendientes_precios = ejecutar_sql("SELECT * FROM precios_pendientes_validacion WHERE ESTADO = 'PENDIENTE'")
+            if not df_pendientes_precios.empty:
+                str_module.warning(f"Hay {len(df_pendientes_precios)} modificaciones de precios detectadas pendientes de tu aprobación.")
                 
-                if btn_borrar and ref_a_borrar:
-                    codigo_a_quitar = ref_a_borrar.split(" - ")[0]
-                    try:
-                        conn = sqlite3.connect(DB_NAME)
-                        cursor = conn.cursor()
-                        cursor.execute("DELETE FROM hoja_almacen WHERE CÓDIGO = ?", (codigo_a_quitar,))
-                        conn.commit()
-                        conn.close()
-                        str_module.success(f"¡Referencia '{ref_a_borrar}' eliminada correctamente!")
-                        str_module.rerun()
-                    except Exception as e:
-                        str_module.error(f"Error al eliminar: {e}")
-        else:
-            str_module.info("No hay referencias registradas para eliminar.")
+                for _, row_p in df_pendientes_precios.iterrows():
+                    col_ap1, col_ap2, col_ap3 = str_module.columns([3, 2, 2])
+                    with col_ap1:
+                        str_module.markdown(f"**{row_p['PRODUCTO']}** ({row_p['PROVEEDOR']})")
+                        str_module.text(f"Actual: {row_p['PRECIO_ACTUAL']} € ➡️ Nuevo detectado: {row_p['PRECIO_NUEVO']} €")
+                    with col_ap2:
+                        if str_module.button(f"✅ Aprobar", key=f"aprob_{row_p['ID']}"):
+                            conn = sqlite3.connect(DB_NAME)
+                            cursor = conn.cursor()
+                            cursor.execute("UPDATE hoja_almacen SET [PRECIO UNITARIO €] = ? WHERE CÓDIGO = ?", (row_p['PRECIO_NUEVO'], row_p['CÓDIGO']))
+                            cursor.execute("UPDATE precios_pendientes_validacion SET ESTADO = 'APROBADO' WHERE ID = ?", (row_p['ID'],))
+                            conn.commit()
+                            conn.close()
+                            str_module.success("¡Precio actualizado!")
+                            str_module.rerun()
+                    with col_ap3:
+                        if str_module.button(f"❌ Descartar", key=f"desc_{row_p['ID']}"):
+                            conn = sqlite3.connect(DB_NAME)
+                            cursor = conn.cursor()
+                            cursor.execute("UPDATE precios_pendientes_validacion SET ESTADO = 'DESCARTADO' WHERE ID = ?", (row_p['ID'],))
+                            conn.commit()
+                            conn.close()
+                            str_module.info("Cambio descartado.")
+                            str_module.rerun()
+            else:
+                str_module.info("No hay cambios de precios pendientes de revisión.")
 
-    str_module.markdown("---")
+        tab_nuevo, tab_eliminar = str_module.tabs(["➕ Añadir Nueva Referencia", "🗑️ Eliminar Referencias Antiguas"])
+        
+        with tab_nuevo:
+            with str_module.form("form_nueva_ref"):
+                c1, c2, c3 = str_module.columns(3)
+                with c1:
+                    prov_input = str_module.text_input("Proveedor", value="")
+                    codigo_input = str_module.text_input("Código (Ej: PROV-01 o ELAB-01)")
+                    producto_input = str_module.text_input("Nombre del Producto")
+                with c2:
+                    unidad_input = str_module.selectbox("Unidad de Medida", ["Kg", "Litro", "Unidad", "Gramos", "Cl"])
+                    precio_input = str_module.text_input("Precio Unitario (€)", value="0.0")
+                    stock_act_input = str_module.text_input("Stock Actual", value="0.0")
+                with c3:
+                    stock_min_input = str_module.text_input("Stock Mínimo", value="0.0")
+                    gasto_mensual_input = str_module.text_input("Gasto Mensual Estimado (€)", value="0.0")
+
+                btn_guardar_ref = str_module.form_submit_button("💾 Guardar Referencia en Base de Datos")
+
+                if btn_guardar_ref:
+                    if not codigo_input or not producto_input:
+                        str_module.error("Por favor, rellena al menos el Código y el Nombre del producto.")
+                    else:
+                        try:
+                            def limpiar_float(val):
+                                val_str = str(val).strip().replace(',', '.')
+                                return float(val_str) if val_str else 0.0
+
+                            p_val = limpiar_float(precio_input)
+                            s_act = limpiar_float(stock_act_input)
+                            s_min = limpiar_float(stock_min_input)
+                            g_mes = limpiar_float(gasto_mensual_input)
+
+                            conn = sqlite3.connect(DB_NAME)
+                            cursor = conn.cursor()
+                            cursor.execute("""
+                                INSERT OR REPLACE INTO hoja_almacen (PROVEEDOR, CÓDIGO, PRODUCTO, UNIDAD, [PRECIO UNITARIO €], [STOCK ACTUAL EN ALMACÉN], [STOCK MÍNIMO], [GASTO MENSUAL €])
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (prov_input, codigo_input, producto_input, unidad_input, p_val, s_act, s_min, g_mes))
+                            conn.commit()
+                            conn.close()
+                            str_module.success(f"¡Referencia '{producto_input}' guardada con éxito!")
+                            str_module.rerun()
+                        except Exception as e:
+                            str_module.error(f"Error al guardar: {e}")
+
+        with tab_eliminar:
+            df_actual = ejecutar_sql("SELECT CÓDIGO, PRODUCTO FROM hoja_almacen")
+            if not df_actual.empty:
+                opciones_eliminar = [f"{row['CÓDIGO']} - {row['PRODUCTO']}" for _, row in df_actual.iterrows()]
+                with str_module.form("form_eliminar_ref"):
+                    ref_a_borrar = str_module.selectbox("Selecciona la referencia que deseas eliminar", opciones_eliminar)
+                    btn_borrar = str_module.form_submit_button("🗑️ Eliminar Referencia Seleccionada")
+                    
+                    if btn_borrar and ref_a_borrar:
+                        codigo_a_quitar = ref_a_borrar.split(" - ")[0]
+                        try:
+                            conn = sqlite3.connect(DB_NAME)
+                            cursor = conn.cursor()
+                            cursor.execute("DELETE FROM hoja_almacen WHERE CÓDIGO = ?", (codigo_a_quitar,))
+                            conn.commit()
+                            conn.close()
+                            str_module.success(f"¡Referencia '{ref_a_borrar}' eliminada correctamente!")
+                            str_module.rerun()
+                        except Exception as e:
+                            str_module.error(f"Error al eliminar: {e}")
+            else:
+                str_module.info("No hay referencias registradas para eliminar.")
+
+        str_module.markdown("---")
+
     df_alm = ejecutar_sql("SELECT * FROM hoja_almacen")
 
     if not df_alm.empty:
@@ -662,8 +698,12 @@ with pestana_principal:
         df_final = df_alm[columnas_ordenadas]
 
         str_module.markdown("### ✏️ Edición de Stock Mínimo")
-        str_module.info("💡 Haz doble clic sobre cualquier celda de la columna **STOCK MÍNIMO** para modificar su valor directamente. Los productos **ELAB** desglosarán automáticamente sus necesidades en los ingredientes base.")
-        disabled_cols = [c for c in df_final.columns if c != col_min]
+        if str_module.session_state["rol"] == "admin":
+            str_module.info("💡 Haz doble clic sobre cualquier celda de la columna **STOCK MÍNIMO** para modificar su valor directamente. Los productos **ELAB** desglosarán automáticamente sus necesidades en los ingredientes base.")
+            disabled_cols = [c for c in df_final.columns if c != col_min]
+        else:
+            str_module.info("Modo Cliente: Visualización de almacén. Solo el stock mínimo es editable por el administrador.")
+            disabled_cols = list(df_final.columns)
 
         edited_df = str_module.data_editor(
             df_final,
@@ -673,25 +713,30 @@ with pestana_principal:
             key="editor_almacen_stock_min"
         )
 
-        if str_module.button("💾 Guardar Cambios en Stock Mínimo"):
-            try:
-                conn = sqlite3.connect(DB_NAME)
-                cursor = conn.cursor()
-                for _, row in edited_df.iterrows():
-                    codigo_val = row[col_cod]
-                    nuevo_min_val = float(str(row[col_min]).replace(',', '.') if pd.notna(row[col_min]) else 0.0)
-                    cursor.execute(f"UPDATE hoja_almacen SET [{col_min}] = ? WHERE CÓDIGO = ?", (nuevo_min_val, codigo_val))
-                conn.commit()
-                conn.close()
-                str_module.success("¡Stock mínimo actualizado con éxito y pedidos automatizados por ingredientes!")
-                str_module.rerun()
-            except Exception as e:
-                str_module.error(f"Error al guardar los cambios: {e}")
+        if str_module.session_state["rol"] == "admin":
+            if str_module.button("💾 Guardar Cambios en Stock Mínimo"):
+                try:
+                    conn = sqlite3.connect(DB_NAME)
+                    cursor = conn.cursor()
+                    for _, row in edited_df.iterrows():
+                        codigo_val = row[col_cod]
+                        nuevo_min_val = float(str(row[col_min]).replace(',', '.') if pd.notna(row[col_min]) else 0.0)
+                        cursor.execute(f"UPDATE hoja_almacen SET [{col_min}] = ? WHERE CÓDIGO = ?", (nuevo_min_val, codigo_val))
+                    conn.commit()
+                    conn.close()
+                    str_module.success("¡Stock mínimo actualizado con éxito y pedidos automatizados por ingredientes!")
+                    str_module.rerun()
+                except Exception as e:
+                    str_module.error(f"Error al guardar los cambios: {e}")
     else:
         str_module.info("La base de datos está vacía actualmente.")
 
 with pestana_escandallos:
-    str_module.title("📊 Escandallos y Precios")
+    if str_module.session_state.get("rol") == "admin":
+        str_module.title("📊 Escandallos y Precios")
+    else:
+        str_module.title("📊 Escandallos y Precios (Solo Visualización)")
+    
     str_module.markdown("Consulta el registro de escandallos, precios netos y mermas calculadas.")
     str_module.markdown("---")
 
@@ -699,125 +744,141 @@ with pestana_escandallos:
     if not df_esc_guardados.empty:
         str_module.dataframe(df_esc_guardados, use_container_width=True, hide_index=True)
         
-    str_module.markdown("---")
-    str_module.markdown("### 📊 Registrar / Actualizar Escandallo")
-    df_inv_escandallo = ejecutar_sql("SELECT CÓDIGO, PRODUCTO, [PRECIO UNITARIO €] FROM hoja_almacen")
-    if not df_inv_escandallo.empty:
-        opciones_inv_esc = [f"{row['CÓDIGO']} - {row['PRODUCTO']}" for _, row in df_inv_escandallo.iterrows()]
+        if str_module.session_state["rol"] == "admin":
+            str_module.markdown("---")
+            str_module.markdown("### 📊 Registrar / Actualizar Escandallo")
+            df_inv_escandallo = ejecutar_sql("SELECT CÓDIGO, PRODUCTO, [PRECIO UNITARIO €] FROM hoja_almacen")
+            if not df_inv_escandallo.empty:
+                opciones_inv_esc = [f"{row['CÓDIGO']} - {row['PRODUCTO']}" for _, row in df_inv_escandallo.iterrows()]
 
-        with str_module.form("form_escandallo_precios"):
-            ce1, ce2, ce3 = str_module.columns(3)
-            with ce1:
-                producto_esc_sel = str_module.selectbox("Seleccionar Producto", opciones_inv_esc)
-                precio_bruto_input = str_module.text_input("Precio Bruto (€)", value="0.0")
-            with ce2:
-                merma_input = str_module.text_input("Merma del Producto (%)", value="0.0")
-            with ce3:
-                str_module.markdown("<br>", unsafe_allow_html=True)
-                btn_guardar_esc = str_module.form_submit_button("⚡ Calcular, Registrar y Actualizar Almacén")
+                with str_module.form("form_escandallo_precios"):
+                    ce1, ce2, ce3 = str_module.columns(3)
+                    with ce1:
+                        producto_esc_sel = str_module.selectbox("Seleccionar Producto", opciones_inv_esc)
+                        precio_bruto_input = str_module.text_input("Precio Bruto (€)", value="0.0")
+                    with ce2:
+                        merma_input = str_module.text_input("Merma del Producto (%)", value="0.0")
+                    with ce3:
+                        str_module.markdown("<br>", unsafe_allow_html=True)
+                        btn_guardar_esc = str_module.form_submit_button("⚡ Calcular, Registrar y Actualizar Almacén")
 
-            if btn_guardar_esc:
-                try:
-                    p_bruto = float(str(precio_bruto_input).strip().replace(',', '.') or 0.0)
-                    p_merma = float(str(merma_input).strip().replace(',', '.') or 0.0)
+                    if btn_guardar_esc:
+                        try:
+                            p_bruto = float(str(precio_bruto_input).strip().replace(',', '.') or 0.0)
+                            p_merma = float(str(merma_input).strip().replace(',', '.') or 0.0)
 
-                    if p_merma >= 100:
-                        str_module.error("La merma no puede ser igual o superior al 100%.")
-                    else:
-                        denominador = (1.0 - (p_merma / 100.0))
-                        precio_neto = p_bruto / denominador if denominador > 0 else p_bruto
+                            if p_merma >= 100:
+                                str_module.error("La merma no puede ser igual o superior al 100%.")
+                            else:
+                                denominador = (1.0 - (p_merma / 100.0))
+                                precio_neto = p_bruto / denominador if denominador > 0 else p_bruto
 
-                        codigo_prod = producto_esc_sel.split(" - ")[0]
-                        nombre_prod = producto_esc_sel.split(" - ")[1]
+                                codigo_prod = producto_esc_sel.split(" - ")[0]
+                                nombre_prod = producto_esc_sel.split(" - ")[1]
 
-                        row_actual_prod = df_inv_escandallo[df_inv_escandallo['CÓDIGO'] == codigo_prod]
-                        precio_actual_db = float(row_actual_prod.iloc[0]['[PRECIO UNITARIO €]']) if not row_actual_prod.empty and '[PRECIO UNITARIO €]' in row_actual_prod.columns else 0.0
+                                row_actual_prod = df_inv_escandallo[df_inv_escandallo['CÓDIGO'] == codigo_prod]
+                                precio_actual_db = float(row_actual_prod.iloc[0]['[PRECIO UNITARIO €]']) if not row_actual_prod.empty and '[PRECIO UNITARIO €]' in row_actual_prod.columns else 0.0
 
-                        conn = sqlite3.connect(DB_NAME)
-                        cursor = conn.cursor()
-                        cursor.execute("""
-                            INSERT OR REPLACE INTO escandallos_precios (CÓDIGO, PRODUCTO, [PRECIO BRUTO], [MERMA %], [PRECIO NETO])
-                            VALUES (?, ?, ?, ?, ?)
-                        """, (codigo_prod, nombre_prod, p_bruto, p_merma, precio_neto))
+                                conn = sqlite3.connect(DB_NAME)
+                                cursor = conn.cursor()
+                                cursor.execute("""
+                                    INSERT OR REPLACE INTO escandallos_precios (CÓDIGO, PRODUCTO, [PRECIO BRUTO], [MERMA %], [PRECIO NETO])
+                                    VALUES (?, ?, ?, ?, ?)
+                                """, (codigo_prod, nombre_prod, p_bruto, p_merma, precio_neto))
 
-                        if precio_actual_db > 0 and abs(precio_neto - precio_actual_db) > 0.001:
-                            cursor.execute("""
-                                INSERT INTO precios_pendientes_validacion (FECHA, PROVEEDOR, CÓDIGO, PRODUCTO, PRECIO_ACTUAL, PRECIO_NUEVO, ESTADO)
-                                SELECT ?, PROVEEDOR, ?, ?, ?, ?, 'PENDIENTE'
-                                FROM hoja_almacen WHERE CÓDIGO = ?
-                            """, (date.today().strftime("%Y-%m-%d"), codigo_prod, nombre_prod, precio_actual_db, precio_neto, codigo_prod))
-                            str_module.warning("⚠️ Se ha detectado una diferencia con el precio actual. El cambio se ha enviado a la bandeja de validación del administrador.")
-                        else:
-                            cursor.execute("""
-                                UPDATE hoja_almacen SET [PRECIO UNITARIO €] = ? WHERE CÓDIGO = ?
-                            """, (precio_neto, codigo_prod))
-                            str_module.success(f"¡Precio Neto calculado ({precio_neto:.2f} €), registrado y actualizado en el Almacén para '{nombre_prod}'!")
+                                if precio_actual_db > 0 and abs(precio_neto - precio_actual_db) > 0.001:
+                                    cursor.execute("""
+                                        INSERT INTO precios_pendientes_validacion (FECHA, PROVEEDOR, CÓDIGO, PRODUCTO, PRECIO_ACTUAL, PRECIO_NUEVO, ESTADO)
+                                        SELECT ?, PROVEEDOR, ?, ?, ?, ?, 'PENDIENTE'
+                                        FROM hoja_almacen WHERE CÓDIGO = ?
+                                    """, (date.today().strftime("%Y-%m-%d"), codigo_prod, nombre_prod, precio_actual_db, precio_neto, codigo_prod))
+                                    str_module.warning("⚠️ Se ha detectado una diferencia con el precio actual. El cambio se ha enviado a la bandeja de validación del administrador.")
+                                else:
+                                    cursor.execute("""
+                                        UPDATE hoja_almacen SET [PRECIO UNITARIO €] = ? WHERE CÓDIGO = ?
+                                    """, (precio_neto, codigo_prod))
+                                    str_module.success(f"¡Precio Neto calculado ({precio_neto:.2f} €), registrado y actualizado en el Almacén para '{nombre_prod}'!")
 
-                        conn.commit()
-                        conn.close()
-                        str_module.rerun()
-                except Exception as e:
-                    str_module.error(f"Error al calcular el precio neto: {e}")
+                                conn.commit()
+                                conn.close()
+                                str_module.rerun()
+                        except Exception as e:
+                            str_module.error(f"Error al calcular el precio neto: {e}")
+            else:
+                str_module.info("No hay referencias en el inventario.")
     else:
-        str_module.info("No hay referencias en el inventario.")
+        str_module.info("Todavía no se ha registrado ningún escandallo de precios.")
 
 with pestana_movimientos:
     str_module.title("🔄 Entradas / Salidas de Género")
-    str_module.markdown("Gestión y registro de entradas y salidas de almacén.")
+    str_module.markdown("Gestión y registro de entradas y salidas de almacén con actualización automática de stock.")
     str_module.markdown("---")
-    
-    with str_module.form("form_nuevo_movimiento"):
-        cm1, cm2, cm3 = str_module.columns(3)
-        with cm1:
-            fecha_mov = str_module.date_input("Fecha", value=date.today())
-            tipo_mov = str_module.selectbox("Tipo de Movimiento", ["ENTRADA", "SALIDA"])
-        with cm2:
-            df_inv_mov = ejecutar_sql("SELECT CÓDIGO, PRODUCTO, UNIDAD FROM hoja_almacen")
-            if not df_inv_mov.empty:
-                opciones_mov = [f"{row['CÓDIGO']} - {row['PRODUCTO']}" for _, row in df_inv_mov.iterrows()]
-                prod_mov_sel = str_module.selectbox("Producto", opciones_mov)
-            else:
-                prod_mov_sel = None
-            cantidad_mov = str_module.text_input("Cantidad", value="1.0")
-        with cm3:
-            motivo_mov = str_module.text_input("Motivo / Referencia (Ej: Factura 123, Venta sala)")
-            str_module.markdown("<br>", unsafe_allow_html=True)
-            btn_guardar_mov = str_module.form_submit_button("💾 Registrar Movimiento y Actualizar Stock")
 
-        if btn_guardar_mov and prod_mov_sel:
-            try:
-                cant_val = float(str(cantidad_mov).strip().replace(',', '.') or 0.0)
-                cod_m = prod_mov_sel.split(" - ")[0]
-                nom_m = prod_mov_sel.split(" - ")[1]
-                
-                match_uni = df_inv_mov[df_inv_mov['CÓDIGO'] == cod_m]
-                uni_m = match_uni.iloc[0]['UNIDAD'] if not match_uni.empty else "Unidad"
-                f_m_str = fecha_mov.strftime("%Y-%m-%d")
+    if str_module.session_state["rol"] == "admin":
+        str_module.markdown("### 📝 Registrar Nuevo Movimiento en Almacén")
+        
+        df_inventario_activo = ejecutar_sql("SELECT CÓDIGO, PRODUCTO, [STOCK ACTUAL EN ALMACÉN], UNIDAD FROM hoja_almacen")
+        
+        if not df_inventario_activo.empty:
+            opciones_productos = [f"{row['CÓDIGO']} - {row['PRODUCTO']} (Stock Actual: {row['STOCK ACTUAL EN ALMACÉN']} {row['UNIDAD']})" for _, row in df_inventario_activo.iterrows()]
 
-                conn = sqlite3.connect(DB_NAME)
-                cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT INTO movimientos_almacen (FECHA, TIPO, CÓDIGO, PRODUCTO, CANTIDAD, UNIDAD, MOTIVO)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (f_m_str, tipo_mov, cod_m, nom_m, cant_val, uni_m, motivo_mov))
+            with str_module.form("form_movimiento_almacen"):
+                mc1, mc2, mc3 = str_module.columns(3)
+                with mc1:
+                    tipo_movimiento = str_module.selectbox("Tipo de Movimiento", ["ENTRADA", "SALIDA"])
+                    producto_seleccionado = str_module.selectbox("Seleccionar Producto", opciones_productos)
+                with mc2:
+                    cantidad_input = str_module.text_input("Cantidad a Sumar / Restar", value="1.0")
+                    unidad_movimiento = str_module.text_input("Unidad de Medida", value="Kg")
+                with mc3:
+                    motivo_input = str_module.text_input("Motivo / Proveedor / Destino (Opcional)", value="")
+                    str_module.markdown("<br>", unsafe_allow_html=True)
+                    btn_guardar_mov = str_module.form_submit_button("⚡ Registrar Movimiento y Actualizar Stock")
 
-                if tipo_mov == "ENTRADA":
-                    cursor.execute("""
-                        UPDATE hoja_almacen SET [STOCK ACTUAL EN ALMACÉN] = [STOCK ACTUAL EN ALMACÉN] + ? WHERE CÓDIGO = ?
-                    """, (cant_val, cod_m))
-                else:
-                    cursor.execute("""
-                        UPDATE hoja_almacen SET [STOCK ACTUAL EN ALMACÉN] = MAX(0.0, [STOCK ACTUAL EN ALMACÉN] - ?) WHERE CÓDIGO = ?
-                    """, (cant_val, cod_m))
+                if btn_guardar_mov:
+                    try:
+                        cantidad_val = float(str(cantidad_input).strip().replace(',', '.') or 0.0)
+                        if cantidad_val <= 0:
+                            str_module.error("La cantidad debe ser mayor que cero.")
+                        else:
+                            codigo_prod = producto_seleccionado.split(" - ")[0]
+                            nombre_prod = producto_seleccionado.split(" - ")[1].split(" (Stock")[0]
+                            
+                            row_prod_actual = df_inventario_activo[df_inventario_activo['CÓDIGO'] == codigo_prod]
+                            stock_actual_bd = float(row_prod_actual.iloc[0]['[STOCK ACTUAL EN ALMACÉN]']) if not row_prod_actual.empty and '[STOCK ACTUAL EN ALMACÉN]' in row_prod_actual.columns else 0.0
 
-                conn.commit()
-                conn.close()
-                str_module.success(f"¡Movimiento de {tipo_mov} registrado con éxito y stock actualizado!")
-                str_module.rerun()
-            except Exception as e:
-                str_module.error(f"Error al registrar movimiento: {e}")
+                            if tipo_movimiento == "ENTRADA":
+                                nuevo_stock = stock_actual_bd + cantidad_val
+                            else:
+                                nuevo_stock = stock_actual_bd - cantidad_val
 
-    str_module.markdown("---")
+                            fecha_actual_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                            conn = sqlite3.connect(DB_NAME)
+                            cursor = conn.cursor()
+                            
+                            cursor.execute("""
+                                INSERT INTO movimientos_almacen (FECHA, TIPO, CÓDIGO, PRODUCTO, CANTIDAD, UNIDAD, MOTIVO)
+                                VALUES (?, ?, ?, ?, ?, ?, ?)
+                            """, (fecha_actual_str, tipo_movimiento, codigo_prod, nombre_prod, cantidad_val, unidad_movimiento, motivo_input))
+
+                            cursor.execute("""
+                                UPDATE hoja_almacen SET [STOCK ACTUAL EN ALMACÉN] = ? WHERE CÓDIGO = ?
+                            """, (nuevo_stock, codigo_prod))
+
+                            conn.commit()
+                            conn.close()
+
+                            str_module.success(f"¡Movimiento de {tipo_movimiento} registrado con éxito! Stock actualizado para '{nombre_prod}' (Nuevo stock: {nuevo_stock}).")
+                            str_module.rerun()
+                    except Exception as e:
+                        str_module.error(f"Error al procesar el movimiento: {e}")
+        else:
+            str_module.info("No hay referencias disponibles en el inventario para registrar movimientos.")
+        
+        str_module.markdown("---")
+
+    str_module.markdown("### 📜 Historial Reciente de Movimientos")
     df_movs_visualizar = ejecutar_sql("SELECT * FROM movimientos_almacen ORDER BY ID DESC LIMIT 50")
     if not df_movs_visualizar.empty:
         str_module.dataframe(df_movs_visualizar, use_container_width=True, hide_index=True)
@@ -828,54 +889,67 @@ with pestana_mermas:
     str_module.title("🗑️ Control de Mermas")
     str_module.markdown("Registro y control de mermas de almacén con descuento automático de stock.")
     str_module.markdown("---")
-    
-    with str_module.form("form_nueva_merma"):
-        cme1, cme2, cme3 = str_module.columns(3)
-        with cme1:
-            fecha_merma = str_module.date_input("Fecha Merma", value=date.today())
-            tipo_merma = str_module.selectbox("Tipo de Merma", ["Caducidad / Deterioro", "Rotura / Accidente", "Exceso de Limpieza / Preparación", "Otro"])
-        with cme2:
-            df_inv_merma = ejecutar_sql("SELECT CÓDIGO, PRODUCTO, UNIDAD FROM hoja_almacen")
-            if not df_inv_merma.empty:
-                opciones_merma = [f"{row['CÓDIGO']} - {row['PRODUCTO']}" for _, row in df_inv_merma.iterrows()]
-                prod_merma_sel = str_module.selectbox("Producto afectado", opciones_merma)
-            else:
-                prod_merma_sel = None
-            cant_merma = str_module.text_input("Cantidad Merma", value="1.0")
-        with cme3:
-            obs_merma = str_module.text_input("Observaciones / Motivo")
-            str_module.markdown("<br>", unsafe_allow_html=True)
-            btn_guardar_merma = str_module.form_submit_button("🗑️ Registrar Merma y Descontar Stock")
 
-        if btn_guardar_merma and prod_merma_sel:
-            try:
-                c_val = float(str(cant_merma).strip().replace(',', '.') or 0.0)
-                cod_me = prod_merma_sel.split(" - ")[0]
-                nom_me = prod_merma_sel.split(" - ")[1]
-                
-                match_uni_me = df_inv_merma[df_inv_merma['CÓDIGO'] == cod_me]
-                uni_me = match_uni_me.iloc[0]['UNIDAD'] if not match_uni_me.empty else "Unidad"
-                f_me_str = fecha_merma.strftime("%Y-%m-%d")
+    if str_module.session_state["rol"] == "admin":
+        str_module.markdown("### 📝 Registrar Nueva Merma")
+        df_inv_mermas = ejecutar_sql("SELECT CÓDIGO, PRODUCTO, [STOCK ACTUAL EN ALMACÉN], UNIDAD FROM hoja_almacen")
+        
+        if not df_inv_mermas.empty:
+            opciones_prod_mermas = [f"{row['CÓDIGO']} - {row['PRODUCTO']} (Stock: {row['STOCK ACTUAL EN ALMACÉN']} {row['UNIDAD']})" for _, row in df_inv_mermas.iterrows()]
 
-                conn = sqlite3.connect(DB_NAME)
-                cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT INTO mermas_almacen (FECHA, TIPO_MERMA, CÓDIGO, PRODUCTO, CANTIDAD, UNIDAD, OBSERVACIONES)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (f_me_str, tipo_merma, cod_me, nom_me, c_val, uni_me, obs_merma))
+            with str_module.form("form_registrar_merma"):
+                mc1, mc2, mc3 = str_module.columns(3)
+                with mc1:
+                    tipo_merma_input = str_module.selectbox("Tipo de Merma", ["Aperitivo", "Caducidad", "Rotura / Deterioro", "Preparación / Limpieza", "Otro"])
+                    producto_merma_sel = str_module.selectbox("Seleccionar Producto", opciones_prod_mermas)
+                with mc2:
+                    cantidad_merma_input = str_module.text_input("Cantidad Merma", value="1.0")
+                    unidad_merma_input = str_module.text_input("Unidad de Medida", value="Kg")
+                with mc3:
+                    obs_merma_input = str_module.text_input("Observaciones / Motivo", value="")
+                    str_module.markdown("<br>", unsafe_allow_html=True)
+                    btn_guardar_merma = str_module.form_submit_button("⚡ Registrar Merma y Descontar Stock")
 
-                cursor.execute("""
-                    UPDATE hoja_almacen SET [STOCK ACTUAL EN ALMACÉN] = MAX(0.0, [STOCK ACTUAL EN ALMACÉN] - ?) WHERE CÓDIGO = ?
-                """, (c_val, cod_me))
+                if btn_guardar_merma:
+                    try:
+                        cant_m = float(str(cantidad_merma_input).strip().replace(',', '.') or 0.0)
+                        if cant_m <= 0:
+                            str_module.error("La cantidad de merma debe ser superior a cero.")
+                        else:
+                            codigo_m = producto_merma_sel.split(" - ")[0]
+                            nombre_m = producto_merma_sel.split(" - ")[1].split(" (Stock")[0]
 
-                conn.commit()
-                conn.close()
-                str_module.success(f"¡Merma registrada y stock descontado correctamente para '{nom_me}'!")
-                str_module.rerun()
-            except Exception as e:
-                str_module.error(f"Error al registrar merma: {e}")
+                            row_m_actual = df_inv_mermas[df_inv_mermas['CÓDIGO'] == codigo_m]
+                            stock_act_m = float(row_m_actual.iloc[0]['[STOCK ACTUAL EN ALMACÉN]']) if not row_m_actual.empty and '[STOCK ACTUAL EN ALMACÉN]' in row_m_actual.columns else 0.0
 
-    str_module.markdown("---")
+                            nuevo_stock_m = stock_act_m - cant_m
+                            fecha_m_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                            conn = sqlite3.connect(DB_NAME)
+                            cursor = conn.cursor()
+                            
+                            cursor.execute("""
+                                INSERT INTO mermas_almacen (FECHA, TIPO_MERMA, CÓDIGO, PRODUCTO, CANTIDAD, UNIDAD, OBSERVACIONES)
+                                VALUES (?, ?, ?, ?, ?, ?, ?)
+                            """, (fecha_m_str, tipo_merma_input, codigo_m, nombre_m, cant_m, unidad_merma_input, obs_merma_input))
+
+                            cursor.execute("""
+                                UPDATE hoja_almacen SET [STOCK ACTUAL EN ALMACÉN] = ? WHERE CÓDIGO = ?
+                            """, (nuevo_stock_m, codigo_m))
+
+                            conn.commit()
+                            conn.close()
+
+                            str_module.success(f"¡Merma registrada con éxito! Se han descontado {cant_m} {unidad_merma_input} de '{nombre_m}' (Stock actual: {nuevo_stock_m}).")
+                            str_module.rerun()
+                    except Exception as e:
+                        str_module.error(f"Error al registrar la merma: {e}")
+        else:
+            str_module.info("No hay referencias en el inventario para registrar mermas.")
+        
+        str_module.markdown("---")
+
+    str_module.markdown("### 📜 Historial de Mermas Registradas")
     df_mermas_visualizar = ejecutar_sql("SELECT * FROM mermas_almacen ORDER BY ID DESC LIMIT 50")
     if not df_mermas_visualizar.empty:
         str_module.dataframe(df_mermas_visualizar, use_container_width=True, hide_index=True)
@@ -883,84 +957,18 @@ with pestana_mermas:
         str_module.info("No hay registros de mermas todavía.")
 
 with pestana_recetas:
-    str_module.title("📖 Recetario y Creación de Elaboraciones")
-    str_module.markdown("Crea recetas, vincula ingredientes desde el almacén y calcula el coste total de producción.")
+    str_module.title("📖 Recetario Actual y Gestión de Recetas")
+    str_module.markdown("Consulta exclusiva de recetas, escandallos, desgloses de elaboración, alta de nuevas recetas y borrado.")
     str_module.markdown("---")
 
-    sub_crear_receta, sub_ver_receta = str_module.tabs(["➕ Crear / Editar Receta", "📖 Consultar Recetas y Costes"])
+    if str_module.session_state["rol"] == "admin":
+        tab_ver_receta, tab_nueva_receta, tab_borrar_receta = str_module.tabs(["👁️ Consultar Receta", "➕ Añadir Nueva Receta", "🗑️ Borrar Receta"])
+    else:
+        tab_ver_receta = str_module.container()
+        tab_nueva_receta = None
+        tab_borrar_receta = None
 
-    with sub_crear_receta:
-        with str_module.form("form_crear_receta_cab"):
-            rc1, rc2 = str_module.columns(2)
-            with rc1:
-                cod_receta_input = str_module.text_input("Código de Receta o Elaboración (Ej: ELAB-01)")
-            with rc2:
-                nombre_receta_input = str_module.text_input("Nombre de la Receta / Elaboración")
-            
-            btn_guardar_cabecera = str_module.form_submit_button("💾 Guardar / Registrar Cabecera de Receta")
-
-            if btn_guardar_cabecera:
-                if not nombre_receta_input.strip() or not cod_receta_input.strip():
-                    str_module.error("El código y el nombre de la receta son obligatorios.")
-                else:
-                    try:
-                        conn = sqlite3.connect(DB_NAME)
-                        cursor = conn.cursor()
-                        cursor.execute("""
-                            INSERT OR REPLACE INTO recetas_cabecera (CODIGO_RECETA, NOMBRE_RECETA)
-                            VALUES (?, ?)
-                        """, (cod_receta_input.strip().upper(), nombre_receta_input.strip()))
-                        conn.commit()
-                        conn.close()
-                        str_module.success(f"¡Receta '{nombre_receta_input.strip()}' creada con éxito!")
-                        str_module.rerun()
-                    except Exception as e:
-                        str_module.error(f"Error al guardar receta: {e}")
-
-        str_module.markdown("---")
-        str_module.markdown("### 🥣 Añadir Ingrediente a Receta Existente")
-        
-        df_recetas_existentes = ejecutar_sql("SELECT NOMBRE_RECETA FROM recetas_cabecera")
-        df_inv_ing = ejecutar_sql("SELECT CÓDIGO, PRODUCTO, UNIDAD FROM hoja_almacen")
-
-        if not df_recetas_existentes.empty and not df_inv_ing.empty:
-            with str_module.form("form_agregar_ingrediente_receta"):
-                ri1, ri2, ri3 = str_module.columns(3)
-                with ri1:
-                    receta_elegida = str_module.selectbox("Seleccionar Receta", df_recetas_existentes['NOMBRE_RECETA'].tolist())
-                    opciones_ing = [f"{row['CÓDIGO']} - {row['PRODUCTO']} ({row['UNIDAD']})" for _, row in df_inv_ing.iterrows()]
-                    ingrediente_elegido = str_module.selectbox("Seleccionar Ingrediente del Almacén", opciones_ing)
-                with ri2:
-                    cantidad_ing_receta = str_module.text_input("Cantidad necesaria en la receta", value="1.0")
-                with ri3:
-                    str_module.markdown("<br>", unsafe_allow_html=True)
-                    btn_guardar_ing_receta = str_module.form_submit_button("➕ Añadir Ingrediente a la Receta")
-
-                if btn_guardar_ing_receta:
-                    try:
-                        cant_n = float(str(cantidad_ing_receta).strip().replace(',', '.') or 0.0)
-                        c_prod = ingrediente_elegido.split(" - ")[0]
-                        
-                        match_prod_rec = df_inv_ing[df_inv_ing['CÓDIGO'] == c_prod]
-                        n_prod = match_prod_rec.iloc[0]['PRODUCTO'] if not match_prod_rec.empty else ""
-                        u_prod = match_prod_rec.iloc[0]['UNIDAD'] if not match_prod_rec.empty else "Unidad"
-
-                        conn = sqlite3.connect(DB_NAME)
-                        cursor = conn.cursor()
-                        cursor.execute("""
-                            INSERT INTO recetas_ingredientes (NOMBRE_RECETA, CODIGO_PRODUCTO, PRODUCTO, CANTIDAD, UNIDAD)
-                            VALUES (?, ?, ?, ?, ?)
-                        """, (receta_elegida, c_prod, n_prod, cant_n, u_prod))
-                        conn.commit()
-                        conn.close()
-                        str_module.success(f"¡Ingrediente '{n_prod}' añadido a '{receta_elegida}' con éxito!")
-                        str_module.rerun()
-                    except Exception as e:
-                        str_module.error(f"Error al añadir ingrediente: {e}")
-        else:
-            str_module.info("Debes crear al menos una receta y tener referencias en el almacén para añadir ingredientes.")
-
-    with sub_ver_receta:
+    with tab_ver_receta:
         df_recetas_cab = ejecutar_sql("SELECT DISTINCT NOMBRE_RECETA, CODIGO_RECETA FROM recetas_cabecera")
         if not df_recetas_cab.empty:
             receta_seleccionada_ver = str_module.selectbox("Selecciona una receta para ver sus ingredientes y escandallo", df_recetas_cab['NOMBRE_RECETA'].tolist())
@@ -985,6 +993,97 @@ with pestana_recetas:
         else:
             str_module.info("Todavía no se ha creado ninguna receta.")
 
+    if str_module.session_state["rol"] == "admin":
+        with tab_nueva_receta:
+            str_module.markdown("### ➕ Crear una Nueva Receta")
+            df_inv_disp = ejecutar_sql("SELECT CÓDIGO, PRODUCTO, UNIDAD FROM hoja_almacen")
+            
+            with str_module.form("form_crear_receta_nueva"):
+                rc1, rc2 = str_module.columns(2)
+                with rc1:
+                    nombre_nueva_receta = str_module.text_input("Nombre de la Receta")
+                with rc2:
+                    codigo_nueva_receta = str_module.text_input("Código de Receta (Ej: ELAB-05)")
+                
+                str_module.markdown("---")
+                str_module.markdown("#### Añadir Ingredientes (hasta 6)")
+                
+                ingredientes_seleccionados = []
+                opciones_inv = [f"{row['CÓDIGO']} - {row['PRODUCTO']} ({row['UNIDAD']})" for _, row in df_inv_disp.iterrows()] if not df_inv_disp.empty else []
+                
+                for i in range(1, 7):
+                    str_module.markdown(f"**Ingrediente {i}**")
+                    ic1, ic2 = str_module.columns([3, 1])
+                    with ic1:
+                        sel_prod = str_module.selectbox(f"Producto {i}", ["-- Ninguno --"] + opciones_inv, key=f"rec_prod_{i}")
+                    with ic2:
+                        cant_prod = str_module.text_input(f"Cantidad {i}", value="0.0", key=f"rec_cant_{i}")
+                    
+                    if sel_prod != "-- Ninguno --":
+                        ingredientes_seleccionados.append((sel_prod, cant_prod))
+                
+                btn_guardar_receta = str_module.form_submit_button("💾 Guardar Receta Completa")
+                
+                if btn_guardar_receta:
+                    if not nombre_nueva_receta.strip():
+                        str_module.error("El nombre de la receta es obligatorio.")
+                    elif not ingredientes_seleccionados:
+                        str_module.error("Debes añadir al menos un ingrediente a la receta.")
+                    else:
+                        try:
+                            conn = sqlite3.connect(DB_NAME)
+                            cursor = conn.cursor()
+                            
+                            cursor.execute("""
+                                INSERT OR REPLACE INTO recetas_cabecera (CODIGO_RECETA, NOMBRE_RECETA)
+                                VALUES (?, ?)
+                            """, (codigo_nueva_receta.strip(), nombre_nueva_receta.strip()))
+                            
+                            cursor.execute("DELETE FROM recetas_ingredientes WHERE NOMBRE_RECETA = ?", (nombre_nueva_receta.strip(),))
+                            
+                            for item_prod, item_cant in ingredientes_seleccionados:
+                                partes = item_prod.split(" - ")
+                                c_prod = partes[0]
+                                p_nombre = partes[1].split(" (")[0]
+                                u_medida = partes[1].split(" (")[1].replace(")", "")
+                                
+                                val_cant = float(str(item_cant).strip().replace(',', '.') or 0.0)
+                                
+                                cursor.execute("""
+                                    INSERT INTO recetas_ingredientes (NOMBRE_RECETA, CODIGO_PRODUCTO, PRODUCTO, CANTIDAD, UNIDAD)
+                                    VALUES (?, ?, ?, ?, ?)
+                                """, (nombre_nueva_receta.strip(), c_prod, p_nombre, val_cant, u_medida))
+                                
+                            conn.commit()
+                            conn.close()
+                            str_module.success(f"¡Receta '{nombre_nueva_receta}' guardada con éxito!")
+                            str_module.rerun()
+                        except Exception as e:
+                            str_module.error(f"Error al guardar la receta: {e}")
+
+        with tab_borrar_receta:
+            str_module.markdown("### 🗑️ Eliminar Receta Existente")
+            df_recetas_borrar = ejecutar_sql("SELECT DISTINCT NOMBRE_RECETA FROM recetas_cabecera")
+            if not df_recetas_borrar.empty:
+                with str_module.form("form_eliminar_receta"):
+                    receta_a_borrar_sel = str_module.selectbox("Selecciona la receta que deseas eliminar", df_recetas_borrar['NOMBRE_RECETA'].tolist())
+                    btn_confirmar_borrado = str_module.form_submit_button("🗑️ Eliminar Receta Seleccionada")
+                    
+                    if btn_confirmar_borrado and receta_a_borrar_sel:
+                        try:
+                            conn = sqlite3.connect(DB_NAME)
+                            cursor = conn.cursor()
+                            cursor.execute("DELETE FROM recetas_ingredientes WHERE NOMBRE_RECETA = ?", (receta_a_borrar_sel,))
+                            cursor.execute("DELETE FROM recetas_cabecera WHERE NOMBRE_RECETA = ?", (receta_a_borrar_sel,))
+                            conn.commit()
+                            conn.close()
+                            str_module.success(f"¡Receta '{receta_a_borrar_sel}' eliminada correctamente!")
+                            str_module.rerun()
+                        except Exception as e:
+                            str_module.error(f"Error al eliminar la receta: {e}")
+            else:
+                str_module.info("No hay recetas disponibles para eliminar.")
+
 with pestana_ingenieria:
     str_module.title("📈 Ingeniería de Menú (Productos Elaborados)")
     str_module.markdown("Evaluación automática basada en el PVP sin IVA calculado al **27% de Food Cost** sobre la elaboración y las ventas extraídas del registro de salidas.")
@@ -1002,31 +1101,32 @@ with pestana_ingenieria:
     df_elaboraciones = ejecutar_sql("SELECT DISTINCT CODIGO_RECETA, NOMBRE_RECETA FROM recetas_cabecera")
 
     if not df_elaboraciones.empty:
-        str_module.markdown("### ⚙️ Registrar Elaboraciones en Ingeniería de Menú")
-        with str_module.form("form_config_ingenieria"):
-            opciones_elab = [f"{row['CODIGO_RECETA']} - {row['NOMBRE_RECETA']}" for _, row in df_elaboraciones.iterrows()]
-            elab_sel = str_module.selectbox("Seleccionar Elaboración a incluir", opciones_elab)
-            btn_guardar_ing_menu = str_module.form_submit_button("💾 Añadir/Vincular a Ingeniería de Menú")
+        if str_module.session_state["rol"] == "admin":
+            str_module.markdown("### ⚙️ Registrar Elaboraciones en Ingeniería de Menú")
+            with str_module.form("form_config_ingenieria"):
+                opciones_elab = [f"{row['CODIGO_RECETA']} - {row['NOMBRE_RECETA']}" for _, row in df_elaboraciones.iterrows()]
+                elab_sel = str_module.selectbox("Seleccionar Elaboración a incluir", opciones_elab)
+                btn_guardar_ing_menu = str_module.form_submit_button("💾 Añadir/Vincular a Ingeniería de Menú")
 
-            if btn_guardar_ing_menu:
-                try:
-                    cod_elab = elab_sel.split(" - ")[0]
-                    nom_elab = elab_sel.split(" - ")[1]
+                if btn_guardar_ing_menu:
+                    try:
+                        cod_elab = elab_sel.split(" - ")[0]
+                        nom_elab = elab_sel.split(" - ")[1]
 
-                    conn = sqlite3.connect(DB_NAME)
-                    cursor = conn.cursor()
-                    cursor.execute("""
-                        INSERT OR IGNORE INTO menu_ingenieria (CODIGO_RECETA, NOMBRE_RECETA)
-                        VALUES (?, ?)
-                    """, (cod_elab, nom_elab))
-                    conn.commit()
-                    conn.close()
+                        conn = sqlite3.connect(DB_NAME)
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            INSERT OR IGNORE INTO menu_ingenieria (CODIGO_RECETA, NOMBRE_RECETA)
+                            VALUES (?, ?)
+                        """, (cod_elab, nom_elab))
+                        conn.commit()
+                        conn.close()
 
-                    str_module.success(f"¡Elaboración '{nom_elab}' vinculada a la ingeniería de menú con éxito!")
-                    str_module.rerun()
-                except Exception as e:
-                    str_module.error(f"Error al guardar datos: {e}")
-        str_module.markdown("---")
+                        str_module.success(f"¡Elaboración '{nom_elab}' vinculada a la ingeniería de menú con éxito!")
+                        str_module.rerun()
+                    except Exception as e:
+                        str_module.error(f"Error al guardar datos: {e}")
+            str_module.markdown("---")
 
         df_menu_registrados = ejecutar_sql("SELECT CODIGO_RECETA, NOMBRE_RECETA FROM menu_ingenieria")
 
@@ -1189,22 +1289,23 @@ with pestana_eventos:
         if not df_eventos_cab.empty:
             str_module.dataframe(df_eventos_cab, use_container_width=True, hide_index=True)
 
-            opciones_borrar_ev = df_eventos_cab['NOMBRE_EVENTO'].tolist()
-            with str_module.form("form_borrar_evento"):
-                ev_a_borrar = str_module.selectbox("Selecciona un evento para eliminarlo por completo", opciones_borrar_ev)
-                btn_del_ev = str_module.form_submit_button("🗑️ Eliminar Evento Seleccionado")
-                if btn_del_ev and ev_a_borrar:
-                    try:
-                        conn = sqlite3.connect(DB_NAME)
-                        cursor = conn.cursor()
-                        cursor.execute("DELETE FROM eventos_items WHERE NOMBRE_EVENTO = ?", (ev_a_borrar,))
-                        cursor.execute("DELETE FROM eventos_cabecera WHERE NOMBRE_EVENTO = ?", (ev_a_borrar,))
-                        conn.commit()
-                        conn.close()
-                        str_module.success(f"¡Evento '{ev_a_borrar}' eliminado correctamente!")
-                        str_module.rerun()
-                    except Exception as e:
-                        str_module.error(f"Error al eliminar: {e}")
+            if str_module.session_state["rol"] == "admin":
+                opciones_borrar_ev = df_eventos_cab['NOMBRE_EVENTO'].tolist()
+                with str_module.form("form_borrar_evento"):
+                    ev_a_borrar = str_module.selectbox("Selecciona un evento para eliminarlo por completo", opciones_borrar_ev)
+                    btn_del_ev = str_module.form_submit_button("🗑️ Eliminar Evento Seleccionado")
+                    if btn_del_ev and ev_a_borrar:
+                        try:
+                            conn = sqlite3.connect(DB_NAME)
+                            cursor = conn.cursor()
+                            cursor.execute("DELETE FROM eventos_items WHERE NOMBRE_EVENTO = ?", (ev_a_borrar,))
+                            cursor.execute("DELETE FROM eventos_cabecera WHERE NOMBRE_EVENTO = ?", (ev_a_borrar,))
+                            conn.commit()
+                            conn.close()
+                            str_module.success(f"¡Evento '{ev_a_borrar}' eliminado correctamente!")
+                            str_module.rerun()
+                        except Exception as e:
+                            str_module.error(f"Error al eliminar: {e}")
         else:
             str_module.info("No hay eventos registrados todavía.")
 
@@ -1506,85 +1607,54 @@ with pestana_pedidos:
             str_module.markdown("---")
             str_module.dataframe(df_hist_pedidos, use_container_width=True, hide_index=True)
             
-            str_module.markdown("---")
-            str_module.markdown("### 🔄 Gestión de Pedido: Actualizar, Modificar o Anular")
-            with str_module.form("form_gestion_pedido"):
-                col_up1, col_up2, col_up3, col_up4 = str_module.columns(4)
-                with col_up1:
-                    pedidos_lista = df_hist_pedidos['NUMERO_PEDIDO'].tolist()
-                    ped_sel = str_module.selectbox("Número de Pedido", pedidos_lista)
-                with col_up2:
-                    nuevo_estado = str_module.selectbox("Acción / Nuevo Estado", ["PENDIENTE", "ENVIADO", "RECIBIDO", "MODIFICADO", "ANULADO"])
-                with col_up3:
-                    nuevo_coste_input = str_module.text_input("Nuevo Coste (€)", value="0.0")
-                with col_up4:
-                    str_module.markdown("<br>", unsafe_allow_html=True)
-                    btn_gestionar_ped = str_module.form_submit_button("⚡ Aplicar Cambios al Pedido")
-                
-                nuevo_detalle_input = str_module.text_area("Modificar Detalle del Pedido (Opcional)", value="", height=80)
+            if str_module.session_state["rol"] == "admin":
+                str_module.markdown("---")
+                str_module.markdown("### 🔄 Gestión de Pedido: Actualizar, Modificar o Anular")
+                with str_module.form("form_gestion_pedido"):
+                    col_up1, col_up2, col_up3, col_up4 = str_module.columns(4)
+                    with col_up1:
+                        pedidos_lista = df_hist_pedidos['NUMERO_PEDIDO'].tolist()
+                        ped_sel = str_module.selectbox("Número de Pedido", pedidos_lista)
+                    with col_up2:
+                        nuevo_estado = str_module.selectbox("Acción / Nuevo Estado", ["PENDIENTE", "ENVIADO", "RECIBIDO", "MODIFICADO", "ANULADO"])
+                    with col_up3:
+                        nuevo_coste_input = str_module.text_input("Nuevo Coste (€)", value="0.0")
+                    with col_up4:
+                        str_module.markdown("<br>", unsafe_allow_html=True)
+                        btn_gestionar_ped = str_module.form_submit_button("⚡ Aplicar Cambios al Pedido")
+                    
+                    nuevo_detalle_input = str_module.text_area("Modificar Detalle del Pedido (Opcional)", value="", height=80)
 
-                if btn_gestionar_ped and ped_sel:
-                    try:
-                        coste_parseado = float(str(nuevo_coste_input).strip().replace(',', '.') or 0.0)
-                        conn = sqlite3.connect(DB_NAME)
-                        cursor = conn.cursor()
-                        
-                        if nuevo_detalle_input.strip():
-                            cursor.execute("""
-                                UPDATE historial_pedidos 
-                                SET ESTADO = ?, COSTE_TOTAL = CASE WHEN ? > 0 THEN ? ELSE COSTE_TOTAL END, DETALLE_PEDIDO = ? 
-                                WHERE NUMERO_PEDIDO = ?
-                            """, (nuevo_estado, coste_parseado, coste_parseado, nuevo_detalle_input, ped_sel))
-                        else:
-                            cursor.execute("""
-                                UPDATE historial_pedidos 
-                                SET ESTADO = ?, COSTE_TOTAL = CASE WHEN ? > 0 THEN ? ELSE COSTE_TOTAL END 
-                                WHERE NUMERO_PEDIDO = ?
-                            """, (nuevo_estado, coste_parseado, coste_parseado, ped_sel))
+                    if btn_gestionar_ped and ped_sel:
+                        try:
+                            coste_parseado = float(str(nuevo_coste_input).strip().replace(',', '.') or 0.0)
+                            conn = sqlite3.connect(DB_NAME)
+                            cursor = conn.cursor()
                             
-                        conn.commit()
-                        conn.close()
-                        str_module.success(f"¡El pedido {ped_sel} ha sido actualizado correctamente (Estado: {nuevo_estado})!")
-                        str_module.rerun()
-                    except Exception as e:
-                        str_module.error(f"Error al actualizar el pedido: {e}")
+                            if nuevo_detalle_input.strip():
+                                cursor.execute("""
+                                    UPDATE historial_pedidos 
+                                    SET ESTADO = ?, COSTE_TOTAL = CASE WHEN ? > 0 THEN ? ELSE COSTE_TOTAL END, DETALLE_PEDIDO = ? 
+                                    WHERE NUMERO_PEDIDO = ?
+                                """, (nuevo_estado, coste_parseado, coste_parseado, nuevo_detalle_input, ped_sel))
+                            else:
+                                cursor.execute("""
+                                    UPDATE historial_pedidos 
+                                    SET ESTADO = ?, COSTE_TOTAL = CASE WHEN ? > 0 THEN ? ELSE COSTE_TOTAL END 
+                                    WHERE NUMERO_PEDIDO = ?
+                                """, (nuevo_estado, coste_parseado, coste_parseado, ped_sel))
+                                
+                            conn.commit()
+                            conn.close()
+                            str_module.success(f"¡El pedido {ped_sel} ha sido actualizado correctamente (Estado: {nuevo_estado})!")
+                            str_module.rerun()
+                        except Exception as e:
+                            str_module.error(f"Error al actualizar el pedido: {e}")
         else:
             str_module.info("No hay historial de pedidos registrado en el rango de fechas seleccionado.")
 
     with tab_contactos:
         str_module.markdown("### 📇 Agenda y Contactos de Proveedores")
-        
-        with str_module.form("form_nuevo_proveedor"):
-            cp1, cp2, cp3 = str_module.columns(3)
-            with cp1:
-                nom_prov_input = str_module.text_input("Nombre del Proveedor")
-                contacto_prov_input = str_module.text_input("Persona de Contacto")
-            with cp2:
-                tel_prov_input = str_module.text_input("Teléfono / WhatsApp (Ej: 34600000000)")
-                correo_prov_input = str_module.text_input("Correo Electrónico")
-            with cp3:
-                envio_prov_input = str_module.selectbox("Forma de Envío Habitual", ["WhatsApp", "Correo Electrónico"])
-                dias_prov_input = str_module.text_input("Días de Pedido (Ej: LUNES, JUEVES)", value="LUNES, VIERNES")
-                
-            btn_guardar_prov = str_module.form_submit_button("💾 Guardar Proveedor en Agenda")
-            
-            if btn_guardar_prov and nom_prov_input.strip():
-                try:
-                    conn = sqlite3.connect(DB_NAME)
-                    cursor = conn.cursor()
-                    cursor.execute("""
-                        INSERT OR REPLACE INTO proveedores_contactos 
-                        (NOMBRE_PROVEEDOR, CONTACTO, TELEFONO, CORREO, FORMA_ENVIO, DIAS_PEDIDO)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    """, (nom_prov_input.strip(), contacto_prov_input, tel_prov_input, correo_prov_input, envio_prov_input, dias_prov_input))
-                    conn.commit()
-                    conn.close()
-                    str_module.success(f"¡Proveedor '{nom_prov_input.strip()}' guardado correctamente!")
-                    str_module.rerun()
-                except Exception as e:
-                    str_module.error(f"Error al guardar proveedor: {e}")
-
-        str_module.markdown("---")
         df_agenda = ejecutar_sql("SELECT * FROM proveedores_contactos")
         if not df_agenda.empty:
             str_module.dataframe(df_agenda, use_container_width=True, hide_index=True)
@@ -1600,38 +1670,39 @@ with pestana_facturacion:
 
     with tab_ingresos:
         str_module.markdown("### 📊 Control de Ingresos y Facturación")
-        with str_module.form("form_nuevo_ingreso"):
-            c_i1, c_i2, c_i3 = str_module.columns(3)
-            with c_i1:
-                fecha_ingreso = str_module.date_input("Fecha", value=date.today())
-                concepto_ingreso = str_module.text_input("Concepto / Descripción")
-            with c_i2:
-                categoria_ingreso = str_module.selectbox("Categoría", ["Restaurante / Sala", "Eventos", "Take Away / Delivery", "Otros"])
-                base_imponible = str_module.text_input("Base Imponible (€)", value="0.0")
-            with c_i3:
-                tipo_iva = str_module.selectbox("Tipo IVA (%)", [10.0, 21.0, 4.0, 0.0])
-                str_module.markdown("<br>", unsafe_allow_html=True)
-                btn_guardar_ingreso = str_module.form_submit_button("💾 Guardar Ingreso")
+        if str_module.session_state["rol"] == "admin":
+            with str_module.form("form_nuevo_ingreso"):
+                c_i1, c_i2, c_i3 = str_module.columns(3)
+                with c_i1:
+                    fecha_ingreso = str_module.date_input("Fecha", value=date.today())
+                    concepto_ingreso = str_module.text_input("Concepto / Descripción")
+                with c_i2:
+                    categoria_ingreso = str_module.selectbox("Categoría", ["Restaurante / Sala", "Eventos", "Take Away / Delivery", "Otros"])
+                    base_imponible = str_module.text_input("Base Imponible (€)", value="0.0")
+                with c_i3:
+                    tipo_iva = str_module.selectbox("Tipo IVA (%)", [10.0, 21.0, 4.0, 0.0])
+                    str_module.markdown("<br>", unsafe_allow_html=True)
+                    btn_guardar_ingreso = str_module.form_submit_button("💾 Guardar Ingreso")
 
-            if btn_guardar_ingreso:
-                try:
-                    bi = float(str(base_imponible).strip().replace(',', '.') or 0.0)
-                    total_calculado = bi * (1.0 + (tipo_iva / 100.0))
-                    f_str = fecha_ingreso.strftime("%Y-%m-%d")
+                if btn_guardar_ingreso:
+                    try:
+                        bi = float(str(base_imponible).strip().replace(',', '.') or 0.0)
+                        total_calculado = bi * (1.0 + (tipo_iva / 100.0))
+                        f_str = fecha_ingreso.strftime("%Y-%m-%d")
 
-                    conn = sqlite3.connect(DB_NAME)
-                    cursor = conn.cursor()
-                    cursor.execute("""
-                        INSERT INTO facturacion_ingresos (FECHA, CONCEPTO, CATEGORIA, BASE_IMPONIBLE, TIPO_IVA, TOTAL)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    """, (f_str, concepto_ingreso, categoria_ingreso, bi, tipo_iva, total_calculado))
-                    conn.commit()
-                    conn.close()
+                        conn = sqlite3.connect(DB_NAME)
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            INSERT INTO facturacion_ingresos (FECHA, CONCEPTO, CATEGORIA, BASE_IMPONIBLE, TIPO_IVA, TOTAL)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                        """, (f_str, concepto_ingreso, categoria_ingreso, bi, tipo_iva, total_calculado))
+                        conn.commit()
+                        conn.close()
 
-                    str_module.success("¡Ingreso registrado correctamente!")
-                    str_module.rerun()
-                except Exception as e:
-                    str_module.error(f"Error al registrar ingreso: {e}")
+                        str_module.success("¡Ingreso registrado correctamente!")
+                        str_module.rerun()
+                    except Exception as e:
+                        str_module.error(f"Error al registrar ingreso: {e}")
 
         str_module.markdown("---")
         df_ingresos = ejecutar_sql("SELECT * FROM facturacion_ingresos ORDER BY ID DESC")
@@ -1645,37 +1716,38 @@ with pestana_facturacion:
 
     with tab_gestoria_docs:
         str_module.markdown("### 📂 Documentación para Gestoría y Trámites")
-        with str_module.form("form_nuevo_doc_gestoria"):
-            cg_1, cg_2, cg_3 = str_module.columns(3)
-            with cg_1:
-                fecha_doc = str_module.date_input("Fecha Documento", value=date.today(), key="doc_f")
-                tipo_doc = str_module.selectbox("Tipo de Documento", ["Impuestos (IVA / IRPF)", "Nomina / Seguros Sociales", "Licencia / Sanidad", "Factura Proveedor", "Otro"])
-            with cg_2:
-                desc_doc = str_module.text_input("Descripción / Observaciones")
-                estado_doc = str_module.selectbox("Estado", ["Pendiente", "Enviado a Gestoría", "Completado / Archivo"])
-            with cg_3:
-                importe_doc = str_module.text_input("Importe asociado (€)", value="0.0")
-                str_module.markdown("<br>", unsafe_allow_html=True)
-                btn_guardar_doc = str_module.form_submit_button("💾 Registrar Documento")
+        if str_module.session_state["rol"] == "admin":
+            with str_module.form("form_nuevo_doc_gestoria"):
+                cg_1, cg_2, cg_3 = str_module.columns(3)
+                with cg_1:
+                    fecha_doc = str_module.date_input("Fecha Documento", value=date.today(), key="doc_f")
+                    tipo_doc = str_module.selectbox("Tipo de Documento", ["Impuestos (IVA / IRPF)", "Nomina / Seguros Sociales", "Licencia / Sanidad", "Factura Proveedor", "Otro"])
+                with cg_2:
+                    desc_doc = str_module.text_input("Descripción / Observaciones")
+                    estado_doc = str_module.selectbox("Estado", ["Pendiente", "Enviado a Gestoría", "Completado / Archivo"])
+                with cg_3:
+                    importe_doc = str_module.text_input("Importe asociado (€)", value="0.0")
+                    str_module.markdown("<br>", unsafe_allow_html=True)
+                    btn_guardar_doc = str_module.form_submit_button("💾 Registrar Documento")
 
-            if btn_guardar_doc:
-                try:
-                    imp = float(str(importe_doc).strip().replace(',', '.') or 0.0)
-                    f_str_d = fecha_doc.strftime("%Y-%m-%d")
+                if btn_guardar_doc:
+                    try:
+                        imp = float(str(importe_doc).strip().replace(',', '.') or 0.0)
+                        f_str_d = fecha_doc.strftime("%Y-%m-%d")
 
-                    conn = sqlite3.connect(DB_NAME)
-                    cursor = conn.cursor()
-                    cursor.execute("""
-                        INSERT INTO gestoria_documentos (FECHA, TIPO, DESCRIPCION, ESTADO, IMPORTE)
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (f_str_d, tipo_doc, desc_doc, estado_doc, imp))
-                    conn.commit()
-                    conn.close()
+                        conn = sqlite3.connect(DB_NAME)
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            INSERT INTO gestoria_documentos (FECHA, TIPO, DESCRIPCION, ESTADO, IMPORTE)
+                            VALUES (?, ?, ?, ?, ?)
+                        """, (f_str_d, tipo_doc, desc_doc, estado_doc, imp))
+                        conn.commit()
+                        conn.close()
 
-                    str_module.success("¡Documento registrado correctamente para gestoría!")
-                    str_module.rerun()
-                except Exception as e:
-                    str_module.error(f"Error al registrar documento: {e}")
+                        str_module.success("¡Documento registrado correctamente para gestoría!")
+                        str_module.rerun()
+                    except Exception as e:
+                        str_module.error(f"Error al registrar documento: {e}")
 
         str_module.markdown("---")
         df_docs = ejecutar_sql("SELECT * FROM gestoria_documentos ORDER BY ID DESC")
@@ -1735,30 +1807,3 @@ with pestana_facturacion:
             str_module.dataframe(df_control_alb, use_container_width=True, hide_index=True)
         else:
             str_module.info("No hay albaranes registrados todavía para analizar.")
-
-with pestana_escaner:
-    def modulo_escaner_stock():
-        str_module.subheader("📱 Escáner de Albaranes y Productos (Móvil)")
-        
-        tipo_movimiento = str_module.radio(
-            "Selecciona la operación:", 
-            ["Entrada de Stock (Albarán/Factura)", "Salida / Consumo / Merma"],
-            key="radio_escaner_tipo"
-        )
-        
-        imagen_capturada = str_module.camera_input("Apunta al código de barras o QR")
-        
-        if imagen_capturada is not None:
-            str_module.success("¡Imagen capturada correctamente desde el dispositivo!")
-            
-            conn = sqlite3.connect(DB_NAME)
-            cursor = conn.cursor()
-            
-            if "Entrada" in tipo_movimiento:
-                str_module.info("Registrando entrada de género al stock...")
-            else:
-                str_module.info("Registrando salida o consumo...")
-                
-            conn.close()
-
-    modulo_escaner_stock()
